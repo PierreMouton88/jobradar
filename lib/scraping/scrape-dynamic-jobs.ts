@@ -18,50 +18,75 @@ async function scrapeDynamicJobs(): Promise<ScrapedDynamicJobOffer[]> {
 
   const page = await browser.newPage();
 
-  await page.goto("http://localhost:3000/fake-dynamic-jobs");
-
-await page.waitForSelector('[data-testid="jobs-list"]');
-
-const loadMoreButton = page.getByRole("button", { name: "Voir plus" });
-
-if (await loadMoreButton.isVisible()) {
-  await loadMoreButton.click();
-}
-
-const jobs = await page.locator(".job-card").evaluateAll((jobCards) => {
-    return jobCards.map((jobCard) => {
-      const title =
-        jobCard.querySelector(".job-title")?.textContent?.trim() ?? "";
-
-      const company =
-        jobCard.querySelector(".job-company")?.textContent?.trim() ?? "";
-
-      const location =
-        jobCard.querySelector(".job-location")?.textContent?.trim() ?? "";
-
-      const contractType =
-        jobCard.querySelector(".job-contract")?.textContent?.trim() ?? "";
-
-      const description =
-        jobCard.querySelector(".job-description")?.textContent?.trim() ?? "";
-
-      const url =
-        jobCard.querySelector<HTMLAnchorElement>(".job-url")?.href ?? "";
-
-      return {
-        title,
-        company,
-        location,
-        contractType,
-        description,
-        url,
-      };
+  try {
+    await page.goto("http://localhost:3000/fake-dynamic-jobs", {
+      waitUntil: "domcontentloaded",
+      timeout: 10_000,
     });
-  });
 
-  await browser.close();
+    await page.waitForSelector('[data-testid="jobs-list"]', {
+      timeout: 5_000,
+    });
 
-  return jobs;
+    const loadMoreButton = page.getByRole("button", { name: "Voir plus" });
+
+    if (await loadMoreButton.isVisible()) {
+      await loadMoreButton.click();
+    }
+
+    const jobs = await page.locator(".job-card").evaluateAll((jobCards) => {
+      return jobCards.map((jobCard) => {
+        const title =
+          jobCard.querySelector(".job-title")?.textContent?.trim() ?? "";
+
+        const company =
+          jobCard.querySelector(".job-company")?.textContent?.trim() ?? "";
+
+        const location =
+          jobCard.querySelector(".job-location")?.textContent?.trim() ?? "";
+
+        const contractType =
+          jobCard.querySelector(".job-contract")?.textContent?.trim() ?? "";
+
+        const description =
+          jobCard.querySelector(".job-description")?.textContent?.trim() ?? "";
+
+        const url =
+          jobCard.querySelector<HTMLAnchorElement>(".job-url")?.href ?? "";
+
+        return {
+          title,
+          company,
+          location,
+          contractType,
+          description,
+          url,
+        };
+      });
+    });
+
+    return jobs;
+  } catch (error) {
+    const screenshotPath = path.join(
+      process.cwd(),
+      "debug",
+      "dynamic-scraping-error.png"
+    );
+
+    await fs.mkdir(path.dirname(screenshotPath), { recursive: true });
+
+    await page.screenshot({
+      path: screenshotPath,
+      fullPage: true,
+    });
+
+    console.error("Dynamic scraping failed:", error);
+    console.error(`Screenshot saved to: ${screenshotPath}`);
+
+    return [];
+  } finally {
+    await browser.close();
+  }
 }
 
 async function main() {
