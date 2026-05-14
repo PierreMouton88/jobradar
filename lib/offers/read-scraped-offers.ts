@@ -12,7 +12,19 @@ const scrapedJobsFiles = [
   "scraped-jobs.json",
   "dynamic-scraped-jobs.json",
 ];
+function deduplicateOffersByUrl(
+  offers: StoredScrapedJobOffer[]
+): StoredScrapedJobOffer[] {
+  const offersByUrl = new Map<string, StoredScrapedJobOffer>();
 
+  for (const offer of offers) {
+    if (!offersByUrl.has(offer.url)) {
+      offersByUrl.set(offer.url, offer);
+    }
+  }
+
+  return Array.from(offersByUrl.values());
+}
 async function readScrapedJobsFile(
   fileName: string
 ): Promise<StoredScrapedJobOffer[]> {
@@ -34,5 +46,7 @@ export async function readScrapedOffers(): Promise<StoredScrapedJobOffer[]> {
     scrapedJobsFiles.map((fileName) => readScrapedJobsFile(fileName))
   );
 
-  return offersByFile.flat();
+const allOffers = offersByFile.flat();
+
+return deduplicateOffersByUrl(allOffers);
 }
