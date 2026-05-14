@@ -6,11 +6,20 @@ type OfferListProps = {
 };
 
 export function OfferList({ offers }: OfferListProps) {
+  if (offers.length === 0) {
+    return (
+      <p className="mt-6 rounded-lg border p-4 text-sm text-gray-600">
+        Aucune offre à afficher pour le moment. Lance le script de scraping pour
+        générer le fichier JSON.
+      </p>
+    );
+  }
+
   return (
-    <section className="grid gap-4">
+    <div className="mt-6 space-y-4">
       {offers.map((offer) => (
         <OfferCard key={offer.id} offer={offer} />
       ))}
-    </section>
+    </div>
   );
 }

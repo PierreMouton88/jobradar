@@ -17,14 +17,17 @@ export function OfferCard({ offer }: OfferCardProps) {
 
       <div className="mt-2 flex gap-2 text-sm">
         <span>{offer.contractType}</span>
-        <span>Remote : {offer.remote}</span>
+        <span>Remote : {offer.remote ? "Oui" : "Non"}</span>{" "}
       </div>
 
       <p className="mt-3 text-sm">{offer.description}</p>
 
       <ul className="mt-3 flex flex-wrap gap-2">
         {offer.skills.map((skill) => (
-          <li key={skill} className="rounded bg-gray-800 px-2 py-1 text-sm">
+          <li
+            key={skill}
+            className="rounded bg-gray-800 px-2 py-1 text-sm text-white"
+          >
             {skill}
           </li>
         ))}
