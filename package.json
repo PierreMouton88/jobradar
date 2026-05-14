@@ -8,7 +8,7 @@
     "start": "next start",
     "lint": "eslint",
     "scrape:static": "tsx lib/scraping/export-static-jobs.ts",
-    "scrape:dynamic": "tsx lib/scraping/scrape-dynamic-jobs.ts"
+    "scrape:dynamic": "tsx lib/scraping/export-dynamic-jobs.ts"
   },
   "dependencies": {
     "cheerio": "^1.2.0",
