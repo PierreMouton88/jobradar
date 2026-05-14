@@ -7,7 +7,8 @@
     "build": "next build",
     "start": "next start",
     "lint": "eslint",
-    "scrape:static": "tsx lib/scraping/export-static-jobs.ts"
+    "scrape:static": "tsx lib/scraping/export-static-jobs.ts",
+    "scrape:dynamic": "tsx lib/scraping/scrape-dynamic-jobs.ts"
   },
   "dependencies": {
     "cheerio": "^1.2.0",
@@ -22,6 +23,7 @@
     "@types/react-dom": "^19",
     "eslint": "^9",
     "eslint-config-next": "16.2.6",
+    "playwright": "^1.60.0",
     "tailwindcss": "^4",
     "tsx": "^4.21.0",
     "typescript": "^5"
