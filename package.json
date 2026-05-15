@@ -9,7 +9,10 @@
     "lint": "eslint",
     "scrape:static": "tsx lib/scraping/export-static-jobs.ts",
     "scrape:dynamic": "tsx lib/scraping/export-dynamic-jobs.ts",
-    "db:import:scraped": "tsx scripts/import-scraped-jobs.ts"
+    "db:import:scraped": "tsx scripts/import-scraped-jobs.ts",
+    "db:studio": "prisma studio",
+    "db:migrate": "prisma migrate dev",
+    "db:generate": "prisma generate"
   },
   "dependencies": {
     "@prisma/adapter-pg": "^7.8.0",

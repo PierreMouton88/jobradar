@@ -1,22 +1,6 @@
 import { prisma } from "@/lib/prisma";
-import type { JobOffer, ContractType } from "@/types/job-offer";
-
-function mapContractTypeFromDb(contractType: string): ContractType {
-  switch (contractType) {
-    case "CDI":
-      return "CDI";
-    case "CDD":
-      return "CDD";
-    case "STAGE":
-      return "Stage";
-    case "ALTERNANCE":
-      return "Alternance";
-    case "FREELANCE":
-      return "Freelance";
-    default:
-      return "Inconnu";
-  }
-}
+import type { JobOffer } from "@/types/job-offer";
+import { mapContractTypeFromDb } from "@/lib/offers/offer-normalization";
 
 export async function getOffers(): Promise<JobOffer[]> {
   const offers = await prisma.jobOffer.findMany({

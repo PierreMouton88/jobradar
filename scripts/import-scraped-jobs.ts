@@ -1,75 +1,13 @@
 import { prisma } from "../lib/prisma";
 import { readScrapedOffers } from "../lib/offers/read-scraped-offers";
-import type { ContractType } from "@prisma/client";
-
-function normalizeContractTypeForDb(value: string): ContractType {
-  const normalizedValue = value.toLowerCase();
-
-  if (normalizedValue.includes("cdi")) {
-    return "CDI";
-  }
-
-  if (normalizedValue.includes("cdd")) {
-    return "CDD";
-  }
-
-  if (normalizedValue.includes("stage")) {
-    return "STAGE";
-  }
-
-  if (
-    normalizedValue.includes("alternance") ||
-    normalizedValue.includes("apprentissage")
-  ) {
-    return "ALTERNANCE";
-  }
-
-  if (
-    normalizedValue.includes("freelance") ||
-    normalizedValue.includes("indépendant") ||
-    normalizedValue.includes("independant")
-  ) {
-    return "FREELANCE";
-  }
-
-  return "INCONNU";
-}
-
-function detectRemote(location: string): boolean {
-  const normalizedLocation = location.toLowerCase();
-
-  return (
-    normalizedLocation.includes("remote") ||
-    normalizedLocation.includes("télétravail") ||
-    normalizedLocation.includes("teletravail")
-  );
-}
-
-function detectSkills(text: string): string[] {
-  const knownSkills = [
-    "React",
-    "Next.js",
-    "TypeScript",
-    "JavaScript",
-    "Node.js",
-    "NestJS",
-    "PostgreSQL",
-    "Prisma",
-    "Tailwind",
-    "Docker",
-    "Git",
-  ];
-
-  const normalizedText = text.toLowerCase();
-
-  return knownSkills.filter((skill) =>
-    normalizedText.includes(skill.toLowerCase())
-  );
-}
+import {
+  detectRemote,
+  detectSkills,
+  normalizeContractTypeForDb,
+} from "../lib/offers/offer-normalization";
 
 async function main() {
   const startedAt = new Date();
-
   const scrapedOffers = await readScrapedOffers();
 
   const scrapingRun = await prisma.scrapingRun.create({
@@ -80,6 +18,8 @@ async function main() {
       startedAt,
     },
   });
+
+  let importedCount = 0;
 
   for (const offer of scrapedOffers) {
     const fullText = `${offer.title} ${offer.company} ${offer.description}`;
@@ -114,6 +54,8 @@ async function main() {
         scrapingRunId: scrapingRun.id,
       },
     });
+
+    importedCount++;
   }
 
   await prisma.scrapingRun.update({
@@ -121,27 +63,36 @@ async function main() {
       id: scrapingRun.id,
     },
     data: {
+      offersCount: importedCount,
       finishedAt: new Date(),
     },
   });
 
-  console.log(`${scrapedOffers.length} offres importées en base.`);
+  console.log(`${importedCount} offres importées en base.`);
 }
 
 main()
   .catch(async (error) => {
     console.error("Erreur pendant l'import des offres :", error);
 
-    await prisma.scrapingRun.create({
-      data: {
-        source: "json-import",
-        status: "FAILED",
-        offersCount: 0,
-        startedAt: new Date(),
-        finishedAt: new Date(),
-        errorMessage: error instanceof Error ? error.message : "Erreur inconnue",
-      },
-    });
+    try {
+      await prisma.scrapingRun.create({
+        data: {
+          source: "json-import",
+          status: "FAILED",
+          offersCount: 0,
+          startedAt: new Date(),
+          finishedAt: new Date(),
+          errorMessage:
+            error instanceof Error ? error.message : "Erreur inconnue",
+        },
+      });
+    } catch (loggingError) {
+      console.error(
+        "Impossible d'enregistrer l'échec dans ScrapingRun :",
+        loggingError
+      );
+    }
 
     process.exit(1);
   })
