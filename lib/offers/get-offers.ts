@@ -1,97 +1,67 @@
-import { readScrapedOffers } from "./read-scraped-offers";
-import type { ContractType, JobOffer } from "@/types/job-offer";
+import { prisma } from "@/lib/prisma";
+import type { JobOffer, ContractType } from "@/types/job-offer";
 
-function normalizeContractType(value: string): ContractType {
-  const normalizedValue = value.trim().toLowerCase();
-
-  switch (normalizedValue) {
-    case "cdi":
+function mapContractTypeFromDb(contractType: string): ContractType {
+  switch (contractType) {
+    case "CDI":
       return "CDI";
-
-    case "cdd":
+    case "CDD":
       return "CDD";
-
-    case "stage":
+    case "STAGE":
       return "Stage";
-
-    case "alternance":
+    case "ALTERNANCE":
       return "Alternance";
-
-    case "freelance":
+    case "FREELANCE":
       return "Freelance";
-
     default:
       return "Inconnu";
   }
 }
 
-function createOfferIdFromUrl(url: string): string {
-  try {
-    const parsedUrl = new URL(url);
-
-    const pathnameParts = parsedUrl.pathname.split("/").filter(Boolean);
-
-    const lastPart = pathnameParts.at(-1);
-
-    return lastPart ?? encodeURIComponent(url);
-  } catch {
-    return encodeURIComponent(url);
-  }
-}
-
-function detectRemote(location: string): boolean {
-  const normalizedLocation = location.trim().toLowerCase();
-
-  return (
-    normalizedLocation.includes("remote") ||
-    normalizedLocation.includes("télétravail") ||
-    normalizedLocation.includes("teletravail")
-  );
-}
-
-function detectSkills(text: string): string[] {
-  const normalizedText = text.toLowerCase();
-
-  const skillsDictionary = [
-    "React",
-    "TypeScript",
-    "JavaScript",
-    "Next.js",
-    "Node.js",
-    "NestJS",
-    "HTML",
-    "CSS",
-    "Tailwind",
-    "PostgreSQL",
-    "Prisma",
-    "Docker",
-    "Git",
-  ];
-
-  return skillsDictionary.filter((skill) =>
-    normalizedText.includes(skill.toLowerCase()),
-  );
-}
 export async function getOffers(): Promise<JobOffer[]> {
-  const scrapedOffers = await readScrapedOffers();
+  const offers = await prisma.jobOffer.findMany({
+    orderBy: {
+      scrapedAt: "desc",
+    },
+  });
 
-  return scrapedOffers.map((offer) => ({
-    id: createOfferIdFromUrl(offer.url),
+  return offers.map((offer) => ({
+    id: offer.id,
     title: offer.title,
     company: offer.company,
     location: offer.location,
-    contractType: normalizeContractType(offer.contractType),
-    remote: detectRemote(offer.location),
-    skills: detectSkills(`${offer.title} ${offer.description}`),
+    contractType: mapContractTypeFromDb(offer.contractType),
+    remote: offer.remote,
+    skills: offer.skills,
     description: offer.description,
     source: offer.source,
-    createdAt: offer.scrapedAt,
     url: offer.url,
+    createdAt: offer.createdAt.toISOString(),
   }));
 }
 
-export async function getOfferById(id: string): Promise<JobOffer | undefined> {
-  const offers = await getOffers();
+export async function getOfferById(id: string): Promise<JobOffer | null> {
+  const offer = await prisma.jobOffer.findUnique({
+    where: {
+      id,
+    },
+  });
 
-  return offers.find((offer) => offer.id === id);
+  if (!offer) {
+    return null;
+  }
+
+  return {
+    id: offer.id,
+    title: offer.title,
+    company: offer.company,
+    location: offer.location,
+    contractType: mapContractTypeFromDb(offer.contractType),
+    remote: offer.remote,
+    skills: offer.skills,
+    description: offer.description,
+    source: offer.source,
+    url: offer.url,
+    createdAt: offer.createdAt.toISOString(),
+  };
 }

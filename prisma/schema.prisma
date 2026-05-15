@@ -1,0 +1,65 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+}
+
+enum ContractType {
+  CDI
+  CDD
+  STAGE
+  ALTERNANCE
+  FREELANCE
+  INCONNU
+}
+
+enum ScrapingRunStatus {
+  SUCCESS
+  FAILED
+  PARTIAL
+}
+
+model JobOffer {
+  id           String       @id @default(cuid())
+  title        String
+  company      String
+  location     String
+  contractType ContractType @default(INCONNU)
+  remote       Boolean      @default(false)
+  skills       String[]
+  description  String
+  source       String
+  url          String       @unique
+  scrapedAt    DateTime
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  scrapingRunId String?
+  scrapingRun   ScrapingRun? @relation(fields: [scrapingRunId], references: [id])
+
+  @@index([source])
+  @@index([contractType])
+  @@index([scrapedAt])
+}
+
+model ScrapingRun {
+  id           String            @id @default(cuid())
+  source       String
+  status       ScrapingRunStatus @default(SUCCESS)
+  offersCount  Int               @default(0)
+  startedAt    DateTime          @default(now())
+  finishedAt   DateTime?
+  errorMessage String?
+
+  offers JobOffer[]
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([source])
+  @@index([status])
+  @@index([startedAt])
+}
