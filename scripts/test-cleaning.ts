@@ -2,9 +2,17 @@ import {
   cleanText,
   cleanOptionalText,
   normalizeUrl,
+  cleanScrapedOffer,
 } from "@/lib/offers/offer-cleaning";
-import { cleanScrapedOffer } from "@/lib/offers/offer-cleaning";
-import { buildOfferDeduplicationKey } from "@/lib/offers/offer-deduplication";
+import { detectSkills, detectRemote } from "@/lib/offers/offer-normalization";
+import {
+  buildOfferDeduplicationKey,
+  deduplicateOffers,
+  deduplicateOffersWithReport,
+} from "@/lib/offers/offer-deduplication";
+import { analyzeOfferQuality } from "@/lib/offers/offer-quality";
+
+// --- Cleaning ---
 
 console.log(cleanText("  Développeur   React \n\n TypeScript  "));
 console.log(cleanOptionalText(undefined));
@@ -17,17 +25,10 @@ console.log(
 );
 
 console.log(
-  normalizeUrl(
-    "/jobs/react-dev?utm_campaign=test",
-    "https://example.com"
-  )
+  normalizeUrl("/jobs/react-dev?utm_campaign=test", "https://example.com")
 );
 
-console.log(
-  normalizeUrl(
-    "https://example.com/jobs/react-dev/"
-  )
-);
+console.log(normalizeUrl("https://example.com/jobs/react-dev/"));
 
 const dirtyOffer = {
   title: "  Développeur   React  ",
@@ -42,9 +43,7 @@ const dirtyOffer = {
 
 console.log(cleanScrapedOffer(dirtyOffer));
 
-
-
-import { detectSkills } from "@/lib/offers/offer-normalization";
+// --- Normalization ---
 
 console.log(
   detectSkills(
@@ -53,24 +52,15 @@ console.log(
 );
 
 console.log(
-  detectSkills(
-    "Nous cherchons un dev ReactJS avec Next JS, TypeScript, Node.js, PostgreSQL et Docker Compose."
-  )
+  detectSkills("Nous utilisons plusieurs outils internes pour le suivi projet.")
 );
-
-console.log(
-  detectSkills(
-    "Nous utilisons plusieurs outils internes pour le suivi projet."
-  )
-);
-
-import { detectRemote } from "@/lib/offers/offer-normalization";
 
 console.log(detectRemote("Paris - Télétravail partiel possible"));
 console.log(detectRemote("Full remote depuis la France"));
 console.log(detectRemote("Lyon - présentiel uniquement"));
 console.log(detectRemote("Pas de télétravail pour ce poste"));
 
+// --- Deduplication ---
 
 console.log(
   buildOfferDeduplicationKey({
@@ -97,8 +87,6 @@ console.log(
     scrapedAt: new Date().toISOString(),
   })
 );
-
-import { deduplicateOffers } from "@/lib/offers/offer-deduplication";
 
 const duplicatedOffers = [
   {
@@ -125,22 +113,15 @@ const duplicatedOffers = [
 
 console.log(deduplicateOffers(duplicatedOffers).length);
 
-import {
-  deduplicateOffersWithReport,
-} from "@/lib/offers/offer-deduplication";
-
-const deduplicationReport =
-  deduplicateOffersWithReport(duplicatedOffers);
+const deduplicationReport = deduplicateOffersWithReport(duplicatedOffers);
 
 console.log({
   uniqueCount: deduplicationReport.uniqueOffers.length,
   duplicateCount: deduplicationReport.duplicates.length,
-  duplicateReasons: deduplicationReport.duplicates.map(
-    (duplicate) => duplicate.reason
-  ),
+  duplicateReasons: deduplicationReport.duplicates.map((d) => d.reason),
 });
 
-import { analyzeOfferQuality } from "@/lib/offers/offer-quality";
+// --- Quality ---
 
 console.log(
   analyzeOfferQuality(
