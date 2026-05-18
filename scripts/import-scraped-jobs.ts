@@ -45,24 +45,26 @@ async function main() {
   const issuesByType = countIssuesByType(qualityReports);
 
   console.log("Lecture des offres scrapées :");
-  console.log(`- ${scrapedOffersReport.rawCount} offres brutes lues`);
-  console.log(`- ${scrapedOffersReport.cleanedCount} offres nettoyées`);
-  console.log(`- ${scrapedOffersReport.uniqueCount} offres uniques`);
-  console.log(`- ${scrapedOffersReport.duplicateCount} doublons ignorés`);
+console.log(`- ${scrapedOffersReport.rawCount} offres brutes lues`);
+console.log(`- ${scrapedOffersReport.cleanedCount} offres nettoyées`);
+console.log(`- ${scrapedOffersReport.uniqueCount} offres uniques`);
+console.log(`- ${scrapedOffersReport.duplicateCount} doublons ignorés`);
 
-  console.log("Qualité des offres :");
-  console.log(`- score moyen : ${averageQualityScore}/100`);
-  console.log(`- ${offersWithIssuesCount} offres avec anomalies`);
+console.log("Qualité des offres :");
+console.log(`- score moyen : ${averageQualityScore}/100`);
+console.log(`- ${offersWithIssuesCount} offres avec anomalies`);
 
-  for (const [issue, count] of Object.entries(issuesByType)) {
-    console.log(`  - ${issue}: ${count}`);
-  }
+for (const [issue, count] of Object.entries(issuesByType)) {
+  console.log(`  - ${issue}: ${count}`);
+}
 
-  for (const [reason, count] of Object.entries(
-    scrapedOffersReport.duplicatesByReason,
-  )) {
-    console.log(`  - ${reason}: ${count}`);
-  }
+console.log("Déduplication :");
+
+for (const [reason, count] of Object.entries(
+  scrapedOffersReport.duplicatesByReason,
+)) {
+  console.log(`- ${reason}: ${count}`);
+}
 
   const scrapingRun = await prisma.scrapingRun.create({
     data: {
@@ -76,41 +78,48 @@ async function main() {
   let importedCount = 0;
 
   for (const offer of scrapedOffers) {
-    const fullText = `${offer.title} ${offer.company} ${offer.description}`;
+  const skills = detectSkills(`${offer.title} ${offer.description}`);
+  const remote = detectRemote(`${offer.location} ${offer.description}`);
+  const contractType = normalizeContractTypeForDb(offer.contractType);
+  const qualityReport = analyzeOfferQuality(offer, skills);
 
-    await prisma.jobOffer.upsert({
-      where: {
-        url: offer.url,
-      },
-      create: {
-        title: offer.title,
-        company: offer.company,
-        location: offer.location,
-        contractType: normalizeContractTypeForDb(offer.contractType),
-        remote: detectRemote(offer.location),
-        skills: detectSkills(fullText),
-        description: offer.description,
-        source: offer.source,
-        url: offer.url,
-        scrapedAt: new Date(offer.scrapedAt),
-        scrapingRunId: scrapingRun.id,
-      },
-      update: {
-        title: offer.title,
-        company: offer.company,
-        location: offer.location,
-        contractType: normalizeContractTypeForDb(offer.contractType),
-        remote: detectRemote(offer.location),
-        skills: detectSkills(fullText),
-        description: offer.description,
-        source: offer.source,
-        scrapedAt: new Date(offer.scrapedAt),
-        scrapingRunId: scrapingRun.id,
-      },
-    });
+  await prisma.jobOffer.upsert({
+    where: {
+      url: offer.url,
+    },
+    create: {
+      title: offer.title,
+      company: offer.company,
+      location: offer.location,
+      contractType,
+      remote,
+      skills,
+      description: offer.description,
+      source: offer.source,
+      url: offer.url,
+      scrapedAt: new Date(offer.scrapedAt),
+      scrapingRunId: scrapingRun.id,
+      qualityScore: qualityReport.score,
+      qualityIssues: qualityReport.issues,
+    },
+    update: {
+      title: offer.title,
+      company: offer.company,
+      location: offer.location,
+      contractType,
+      remote,
+      skills,
+      description: offer.description,
+      source: offer.source,
+      scrapedAt: new Date(offer.scrapedAt),
+      scrapingRunId: scrapingRun.id,
+      qualityScore: qualityReport.score,
+      qualityIssues: qualityReport.issues,
+    },
+  });
 
-    importedCount++;
-  }
+  importedCount++;
+}
 
   await prisma.scrapingRun.update({
     where: {

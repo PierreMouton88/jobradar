@@ -34,6 +34,9 @@ model JobOffer {
   url          String       @unique
   scrapedAt    DateTime
 
+  qualityScore  Int      @default(100)
+  qualityIssues String[] @default([])
+
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
