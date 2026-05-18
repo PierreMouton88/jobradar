@@ -7,7 +7,7 @@
     "description": "Poste frontend avec React, TypeScript et CSS.",
     "url": "https://fake-jobs.local/offers/react-junior",
     "source": "fake-dynamic-jobs",
-    "scrapedAt": "2026-05-14T14:51:33.898Z"
+    "scrapedAt": "2026-05-18T09:43:01.426Z"
   },
   {
     "title": "Développeur Fullstack TypeScript",
@@ -17,7 +17,7 @@
     "description": "Stack Next.js, Node.js, PostgreSQL et Docker.",
     "url": "https://fake-jobs.local/offers/fullstack-ts",
     "source": "fake-dynamic-jobs",
-    "scrapedAt": "2026-05-14T14:51:33.899Z"
+    "scrapedAt": "2026-05-18T09:43:01.427Z"
   },
   {
     "title": "Intégrateur Frontend",
@@ -27,6 +27,6 @@
     "description": "Intégration HTML, CSS, Tailwind et JavaScript.",
     "url": "https://fake-jobs.local/offers/frontend-integrator",
     "source": "fake-dynamic-jobs",
-    "scrapedAt": "2026-05-14T14:51:33.899Z"
+    "scrapedAt": "2026-05-18T09:43:01.427Z"
   }
 ]

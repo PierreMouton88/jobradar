@@ -1,14 +1,68 @@
 import { prisma } from "../lib/prisma";
-import { readScrapedOffers } from "../lib/offers/read-scraped-offers";
+import { readScrapedOffersWithReport } from "@/lib/offers/read-scraped-offers";
 import {
   detectRemote,
   detectSkills,
   normalizeContractTypeForDb,
 } from "../lib/offers/offer-normalization";
+import { analyzeOfferQuality } from "@/lib/offers/offer-quality";
+
+function countIssuesByType(
+  qualityReports: { issues: string[] }[],
+): Record<string, number> {
+  return qualityReports.reduce<Record<string, number>>((acc, report) => {
+    for (const issue of report.issues) {
+      acc[issue] = (acc[issue] ?? 0) + 1;
+    }
+
+    return acc;
+  }, {});
+}
 
 async function main() {
   const startedAt = new Date();
-  const scrapedOffers = await readScrapedOffers();
+  const scrapedOffersReport = await readScrapedOffersWithReport();
+  const scrapedOffers = scrapedOffersReport.offers;
+
+  const qualityReports = scrapedOffers.map((offer) => {
+    const detectedSkills = detectSkills(`${offer.title} ${offer.description}`);
+
+    return analyzeOfferQuality(offer, detectedSkills);
+  });
+
+  const averageQualityScore =
+    qualityReports.length === 0
+      ? 0
+      : Math.round(
+          qualityReports.reduce((sum, report) => sum + report.score, 0) /
+            qualityReports.length,
+        );
+
+  const offersWithIssuesCount = qualityReports.filter(
+    (report) => report.issues.length > 0,
+  ).length;
+
+  const issuesByType = countIssuesByType(qualityReports);
+
+  console.log("Lecture des offres scrapées :");
+  console.log(`- ${scrapedOffersReport.rawCount} offres brutes lues`);
+  console.log(`- ${scrapedOffersReport.cleanedCount} offres nettoyées`);
+  console.log(`- ${scrapedOffersReport.uniqueCount} offres uniques`);
+  console.log(`- ${scrapedOffersReport.duplicateCount} doublons ignorés`);
+
+  console.log("Qualité des offres :");
+  console.log(`- score moyen : ${averageQualityScore}/100`);
+  console.log(`- ${offersWithIssuesCount} offres avec anomalies`);
+
+  for (const [issue, count] of Object.entries(issuesByType)) {
+    console.log(`  - ${issue}: ${count}`);
+  }
+
+  for (const [reason, count] of Object.entries(
+    scrapedOffersReport.duplicatesByReason,
+  )) {
+    console.log(`  - ${reason}: ${count}`);
+  }
 
   const scrapingRun = await prisma.scrapingRun.create({
     data: {
@@ -90,7 +144,7 @@ main()
     } catch (loggingError) {
       console.error(
         "Impossible d'enregistrer l'échec dans ScrapingRun :",
-        loggingError
+        loggingError,
       );
     }
 
