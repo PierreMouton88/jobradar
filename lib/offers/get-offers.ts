@@ -29,6 +29,9 @@ export async function getOfferById(id: string): Promise<JobOffer | null> {
     where: {
       id,
     },
+    include: {
+      analysis: true,
+    },
   });
 
   if (!offer) {
@@ -47,5 +50,22 @@ export async function getOfferById(id: string): Promise<JobOffer | null> {
     source: offer.source,
     url: offer.url,
     createdAt: offer.createdAt.toISOString(),
+    analysis: offer.analysis
+      ? {
+          summary: offer.analysis.summary,
+          requiredSkills: offer.analysis.requiredSkills,
+          niceToHaveSkills: offer.analysis.niceToHaveSkills,
+          experienceLevel: offer.analysis.experienceLevel,
+          remotePolicy: offer.analysis.remotePolicy,
+          salaryMentioned: offer.analysis.salaryMentioned,
+          redFlags: offer.analysis.redFlags,
+          positiveSignals: offer.analysis.positiveSignals,
+          analysisMode: offer.analysis.analysisMode,
+          modelName: offer.analysis.modelName,
+          inputTokens: offer.analysis.inputTokens,
+          outputTokens: offer.analysis.outputTokens,
+          totalTokens: offer.analysis.totalTokens,
+        }
+      : null,
   };
 }

@@ -18,4 +18,21 @@ export type JobOffer = {
   source: string;
   url: string;
   createdAt: string;
+  analysis?: JobAnalysisView | null;
+};
+
+export type JobAnalysisView = {
+  summary: string;
+  requiredSkills: string[];
+  niceToHaveSkills: string[];
+  experienceLevel: string;
+  remotePolicy: string;
+  salaryMentioned: boolean;
+  redFlags: string[];
+  positiveSignals: string[];
+  analysisMode: string;
+  modelName: string | null;
+  inputTokens: number | null;
+  outputTokens: number | null;
+  totalTokens: number | null;
 };

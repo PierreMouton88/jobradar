@@ -8,7 +8,7 @@ export const mockOffers: JobOffer[] = [
     company: "TechNova",
     location: "Strasbourg",
     contractType: "CDI",
-    remote: "partial",
+    remote: true,
     skills: ["React", "TypeScript", "CSS"],
     description:
       "TechNova recherche un développeur frontend junior pour participer au développement d'une application SaaS en React et TypeScript.",
@@ -22,7 +22,7 @@ export const mockOffers: JobOffer[] = [
     company: "DataCraft",
     location: "Remote",
     contractType: "CDI",
-    remote: "full",
+    remote: true,
     skills: ["React", "Node.js", "PostgreSQL", "TypeScript"],
     description:
       "DataCraft cherche un profil fullstack pour travailler sur une plateforme de gestion de données avec React, Node.js et PostgreSQL.",

@@ -43,6 +43,8 @@ model JobOffer {
   scrapingRunId String?
   scrapingRun   ScrapingRun? @relation(fields: [scrapingRunId], references: [id])
 
+  analysis JobAnalysis?
+
   @@index([source])
   @@index([contractType])
   @@index([scrapedAt])
@@ -65,4 +67,33 @@ model ScrapingRun {
   @@index([source])
   @@index([status])
   @@index([startedAt])
+}
+
+model JobAnalysis {
+  id String @id @default(cuid())
+
+  jobOfferId String   @unique
+  jobOffer   JobOffer @relation(fields: [jobOfferId], references: [id], onDelete: Cascade)
+
+  summary          String
+  requiredSkills   String[]
+  niceToHaveSkills String[]
+  experienceLevel  String
+  remotePolicy     String
+  salaryMentioned  Boolean
+  redFlags         String[]
+  positiveSignals  String[]
+
+  analysisMode String  @default("fake")
+  modelName    String?
+  inputTokens  Int?
+  outputTokens Int?
+  totalTokens  Int?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([experienceLevel])
+  @@index([remotePolicy])
+  @@index([analysisMode])
 }
