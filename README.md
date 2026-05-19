@@ -1,128 +1,124 @@
 # JobRadar IA
 
-JobRadar IA est un projet pédagogique et portfolio autour du scraping, de la structuration de données et de l’intelligence artificielle appliquée à la recherche d’emploi.
+JobRadar IA est un projet pédagogique et portfolio autour du scraping, de la structuration de données et de l’intelligence artificielle appliquée à l’analyse d’offres d’emploi.
 
-L’objectif est de construire progressivement une application capable de récupérer des offres d’emploi depuis des sources contrôlées, les nettoyer, les stocker en base, puis plus tard les analyser avec des LLMs, du RAG et des agents contrôlés.
+L’objectif est de construire progressivement une application capable de :
 
-Le projet est volontairement découpé en modules pour apprendre étape par étape.
+- récupérer des offres depuis des sources contrôlées ;
+- nettoyer et normaliser les données ;
+- stocker les offres dans PostgreSQL ;
+- analyser les offres avec un LLM ;
+- valider les sorties IA avec Zod ;
+- tracer les coûts et les tokens consommés ;
+- préparer ensuite du scoring, du RAG et des agents contrôlés.
+
+Le projet avance module par module afin de rester compréhensible et explicable en entretien.
 
 ---
 
-## Objectif du projet
-
-Le pipeline cible est :
+## Pipeline cible
 
 ```txt
 scraping
-→ nettoyage
+→ nettoyage / normalisation / déduplication
 → PostgreSQL
 → analyse LLM structurée
+→ scoring profil
 → RAG
-→ agent
+→ agent contrôlé
 → interface Next.js
-```
+État actuel du projet
 
-À l’état actuel, le projet couvre principalement :
+Le projet couvre actuellement :
 
-```txt
-Next.js
-→ scraping statique avec Cheerio
-→ scraping dynamique avec Playwright
-→ stockage PostgreSQL avec Prisma
-→ affichage des offres depuis la base
-```
+Module 1 — Next.js minimum viable
+Module 2 — Scraping statique avec Cheerio
+Module 3 — Scraping dynamique avec Playwright
+Module 4 — PostgreSQL + Prisma
+Module 5 — Nettoyage, normalisation, déduplication et qualité des données
+Module 6 — Analyse LLM structurée avec Zod et OpenAI
 
-Les parties IA, RAG, embeddings et agents ne sont pas encore implémentées.
+Le pipeline fonctionnel actuel est :
 
----
+pages fictives / sources contrôlées
+→ scraping statique ou dynamique
+→ export JSON temporaire
+→ nettoyage des données
+→ déduplication
+→ analyse qualité
+→ import PostgreSQL
+→ affichage Next.js
+→ analyse IA manuelle d’une offre
+→ stockage de l’analyse IA
+→ affichage des résultats et des métadonnées IA
 
-## Objectif pédagogique
+Les parties RAG, embeddings, scoring candidat et agents ne sont pas encore implémentées.
+
+Objectif pédagogique
 
 Ce projet sert d’abord à apprendre.
 
 L’objectif n’est pas seulement d’obtenir une application fonctionnelle, mais de comprendre :
 
-- comment structurer une application Next.js ;
-- comment extraire des données depuis du HTML ;
-- pourquoi Cheerio ne suffit pas pour les pages dynamiques ;
-- comment Playwright permet d’automatiser un navigateur ;
-- pourquoi passer de fichiers JSON à une vraie base PostgreSQL ;
-- comment utiliser Prisma pour gérer la base ;
-- comment préparer des données propres pour une future couche IA ;
-- comment construire un projet explicable en entretien.
-
----
-
-## Stack technique
-
-### Frontend / fullstack
-
-- Next.js avec App Router
-- React
-- TypeScript
-- Tailwind CSS
-
-### Scraping
-
-- Cheerio pour le scraping statique
-- Playwright pour le scraping dynamique
-
-### Base de données
-
-- PostgreSQL
-- Prisma ORM
-- Docker Compose pour lancer PostgreSQL en local
-
-### Prévu plus tard
-
-- Vercel AI SDK
-- OpenAI API ou modèle compatible
-- Zod pour les structured outputs
-- embeddings
-- pgvector
-- RAG
-- agents IA avec tools contrôlés
-
----
-
-## État actuel du projet
-
-Le projet contient actuellement :
-
-```txt
-Module 1 — Next.js minimum viable
-Module 2 — Scraping statique avec Cheerio
-Module 3 — Scraping dynamique avec Playwright
-Module 4 — PostgreSQL + Prisma
-```
-
-Le pipeline actuel est :
-
-```txt
-pages fictives / données contrôlées
-→ scraping statique ou dynamique
-→ export JSON temporaire
-→ import PostgreSQL
-→ lecture avec Prisma
-→ affichage dans Next.js
-```
-
----
-
-## Architecture actuelle
-
-Structure simplifiée du projet :
-
-```txt
+comment structurer une application Next.js avec App Router ;
+comment extraire des données depuis du HTML ;
+pourquoi Cheerio ne suffit pas pour les pages dynamiques ;
+comment Playwright permet d’automatiser un navigateur ;
+pourquoi passer de fichiers JSON à une vraie base PostgreSQL ;
+comment utiliser Prisma pour gérer les migrations et les relations ;
+comment nettoyer et normaliser des données avant de les exploiter ;
+comment éviter les doublons ;
+comment utiliser un LLM pour produire une analyse structurée ;
+pourquoi valider les sorties IA avec Zod ;
+comment tracer les tokens et les coûts d’une analyse IA ;
+comment construire un projet explicable en entretien.
+Stack technique
+Frontend / fullstack
+Next.js avec App Router
+React
+TypeScript
+Tailwind CSS
+Server Components
+Server Actions
+Scraping
+Cheerio pour le scraping statique
+Playwright pour le scraping dynamique
+Base de données
+PostgreSQL
+Prisma ORM
+Docker Compose pour lancer PostgreSQL en local
+IA
+Vercel AI SDK
+OpenAI API
+Zod
+Structured outputs
+Mode fake IA avec USE_FAKE_AI
+Stockage des analyses IA en base
+Suivi des tokens consommés
+Estimation indicative du coût par requête
+Prévu plus tard
+scoring par rapport au profil candidat ;
+embeddings ;
+pgvector ;
+RAG ;
+agents IA avec tools contrôlés.
+Architecture simplifiée
 jobradar-ia/
 ├─ app/
 │  ├─ offers/
 │  │  ├─ page.tsx
 │  │  └─ [id]/
-│  │     └─ page.tsx
+│  │     ├─ page.tsx
+│  │     ├─ actions.ts
+│  │     └─ AnalyzeSubmitButton.tsx
+│  │
 │  ├─ fake-dynamic-jobs/
 │  │  └─ page.tsx
-│  └─ scraping-runs/
+│  │
+│  ├─ scraping-runs/
+│  │  └─ page.tsx
+│  │
+│  └─ data-quality/
 │     └─ page.tsx
 │
 ├─ components/
@@ -132,10 +128,19 @@ jobradar-ia/
 │     └─ OfferFilters.tsx
 │
 ├─ lib/
+│  ├─ ai/
+│  │  ├─ job-analysis-schema.ts
+│  │  ├─ analyze-job-offer.ts
+│  │  ├─ analyze-and-save-job-offer.ts
+│  │  └─ estimate-ai-cost.ts
+│  │
 │  ├─ offers/
 │  │  ├─ get-offers.ts
 │  │  ├─ read-scraped-offers.ts
-│  │  └─ offer-normalization.ts
+│  │  ├─ offer-cleaning.ts
+│  │  ├─ offer-deduplication.ts
+│  │  ├─ offer-normalization.ts
+│  │  └─ offer-quality.ts
 │  │
 │  ├─ scraping/
 │  │  ├─ static-job-parser.ts
@@ -151,7 +156,13 @@ jobradar-ia/
 │  └─ migrations/
 │
 ├─ scripts/
-│  └─ import-scraped-jobs.ts
+│  ├─ import-scraped-jobs.ts
+│  ├─ test-cleaning.ts
+│  ├─ test-job-analysis.ts
+│  └─ test-analyze-and-save-job-offer.ts
+│
+├─ types/
+│  └─ job-offer.ts
 │
 ├─ data/
 │  ├─ scraped-jobs.json
@@ -164,32 +175,24 @@ jobradar-ia/
 ├─ prisma.config.ts
 ├─ .env.example
 └─ README.md
-```
+Modules réalisés
+Module 1 — Next.js minimum viable
 
----
-
-## Module 1 — Next.js minimum viable
-
-Le premier module a servi à créer une interface minimale avec Next.js.
+Le premier module a créé une interface minimale avec Next.js.
 
 Routes principales :
 
-```txt
 /offers
 /offers/[id]
-```
 
 Composants principaux :
 
-```txt
 components/offers/OfferCard.tsx
 components/offers/OfferList.tsx
 components/offers/OfferFilters.tsx
-```
 
 Type principal côté UI :
 
-```ts
 export type ContractType =
   | "CDI"
   | "CDD"
@@ -210,55 +213,39 @@ export type JobOffer = {
   source: string;
   url: string;
   createdAt: string;
+  analysis?: JobAnalysisView | null;
 };
-```
 
-Les pages `/offers` et `/offers/[id]` utilisent une couche intermédiaire :
+Les pages ne lisent pas directement la base ou les JSON. Elles passent par :
 
-```txt
 lib/offers/get-offers.ts
-```
+Module 2 — Scraping statique avec Cheerio
 
-Cette couche permet de changer la source des données sans modifier directement les pages.
-
----
-
-## Module 2 — Scraping statique avec Cheerio
-
-Le deuxième module a introduit le scraping statique avec Cheerio.
+Le deuxième module a introduit le scraping statique.
 
 Objectif :
 
-```txt
 HTML local contrôlé
-→ parsing avec Cheerio
+→ parsing Cheerio
 → extraction d’offres
 → export JSON
-```
 
 Fichiers principaux :
 
-```txt
 lib/scraping/static-job-parser.ts
 lib/scraping/static-job-parser.test-data.ts
 lib/scraping/export-static-jobs.ts
-```
 
 Script npm :
 
-```bash
 npm run scrape:static
-```
 
 Ce script génère :
 
-```txt
 data/scraped-jobs.json
-```
 
 Type brut utilisé par le parser :
 
-```ts
 export type ScrapedJobOffer = {
   title: string;
   company: string;
@@ -267,157 +254,224 @@ export type ScrapedJobOffer = {
   description: string;
   url: string;
 };
-```
-
-Ces données sont volontairement brutes. Elles ne correspondent pas encore exactement au type utilisé par l’interface.
-
----
-
-## Module 3 — Scraping dynamique avec Playwright
+Module 3 — Scraping dynamique avec Playwright
 
 Le troisième module a introduit Playwright pour comprendre le scraping de pages générées par JavaScript.
 
 Objectif :
 
-```txt
 page dynamique locale
 → ouverture avec Playwright
 → attente du rendu JavaScript
 → clic sur “Voir plus”
 → extraction des offres
 → export JSON
-```
 
 Route locale de test :
 
-```txt
 /fake-dynamic-jobs
-```
-
-Cette page simule une page dynamique :
-
-```txt
-chargement initial
-→ affichage différé d’offres
-→ bouton “Voir plus”
-→ apparition d’une offre supplémentaire
-```
 
 Fichiers principaux :
 
-```txt
 lib/scraping/dynamic-job-scraper.ts
 lib/scraping/export-dynamic-jobs.ts
-```
 
 Script npm :
 
-```bash
 npm run scrape:dynamic
-```
 
 Ce script génère :
 
-```txt
 data/dynamic-scraped-jobs.json
-```
 
-En cas d’erreur, un screenshot de debug peut être généré dans :
+En cas d’erreur, un screenshot peut être généré dans :
 
-```txt
 debug/dynamic-scraping-error.png
-```
-
----
-
-## Fusion temporaire des JSON
-
-Les fichiers JSON issus du scraping statique et dynamique sont lus par :
-
-```txt
-lib/offers/read-scraped-offers.ts
-```
-
-Sources actuellement lues :
-
-```txt
-data/scraped-jobs.json
-data/dynamic-scraped-jobs.json
-```
-
-Une première déduplication simple existe :
-
-```txt
-même URL = même offre
-```
-
-Cette règle est volontairement simple pour le moment.
-
-Elle sera améliorée dans le module suivant avec :
-
-- normalisation d’URL ;
-- détection de doublons plus robuste ;
-- hash de contenu ;
-- meilleure gestion des sources ;
-- logs d’anomalies.
-
----
-
-## Module 4 — PostgreSQL + Prisma
+Module 4 — PostgreSQL + Prisma
 
 Le quatrième module a ajouté une vraie base de données.
 
 Objectif :
 
-```txt
 JSON temporaires
 → import en base PostgreSQL
 → lecture avec Prisma
-→ affichage dans l’interface
-```
-
-### Pourquoi PostgreSQL ?
+→ affichage dans Next.js
+Pourquoi PostgreSQL ?
 
 Les fichiers JSON sont pratiques pour apprendre, mais limités pour :
 
-- stocker durablement les données ;
-- éviter les doublons proprement ;
-- filtrer et trier efficacement ;
-- garder l’historique des imports ;
-- préparer les futures étapes IA/RAG.
-
-PostgreSQL permet de structurer les données de façon plus sérieuse.
-
-### Pourquoi Prisma ?
+stocker durablement les données ;
+éviter les doublons proprement ;
+filtrer et trier efficacement ;
+garder l’historique des imports ;
+préparer les futures étapes IA/RAG.
+Pourquoi Prisma ?
 
 Prisma sert d’intermédiaire entre TypeScript et PostgreSQL.
 
 Il apporte :
 
-- un schéma de base versionné ;
-- des migrations ;
-- un client TypeScript typé ;
-- des requêtes plus lisibles ;
-- `upsert` pour créer ou mettre à jour une offre selon son URL.
+un schéma versionné ;
+des migrations ;
+un client TypeScript typé ;
+des requêtes lisibles ;
+upsert pour créer ou mettre à jour une offre selon son URL.
+Module 5 — Nettoyage, normalisation, déduplication et qualité
 
----
+Le cinquième module a amélioré la qualité des données avant la couche IA.
 
-## Modèles Prisma actuels
+Objectif :
 
-Le projet contient deux modèles principaux :
+données brutes
+→ données nettoyées
+→ données normalisées
+→ données dédupliquées
+→ données traçables
 
-```txt
+Fonctionnalités ajoutées :
+
+nettoyage des chaînes de caractères ;
+normalisation des URLs ;
+suppression des paramètres UTM ;
+suppression des slashs finaux inutiles ;
+détection améliorée du télétravail ;
+détection améliorée des compétences techniques ;
+déduplication par URL normalisée ;
+déduplication par clé métier title + company + location ;
+rapport de déduplication ;
+analyse qualité des offres ;
+stockage qualityScore et qualityIssues en base ;
+page /data-quality.
+
+Fichiers principaux :
+
+lib/offers/offer-cleaning.ts
+lib/offers/offer-deduplication.ts
+lib/offers/offer-quality.ts
+lib/offers/offer-normalization.ts
+lib/offers/read-scraped-offers.ts
+app/data-quality/page.tsx
+
+La page qualité est disponible ici :
+
+/data-quality
+
+Elle affiche notamment :
+
+le nombre total d’offres ;
+le score qualité moyen ;
+les offres avec anomalies ;
+les anomalies les plus fréquentes ;
+les offres à vérifier en priorité.
+Module 6 — LLM structured extraction
+
+Le sixième module a ajouté une analyse IA structurée des offres.
+
+Objectif :
+
+description d’offre
+→ LLM
+→ objet structuré
+→ validation Zod
+→ stockage PostgreSQL
+→ affichage dans la page détail
+
+L’analyse IA est déclenchée manuellement depuis :
+
+/offers/[id]
+
+Le bouton appelle une Server Action Next.js :
+
+app/offers/[id]/actions.ts
+
+La logique métier est séparée dans :
+
+lib/ai/analyze-and-save-job-offer.ts
+lib/ai/analyze-job-offer.ts
+
+Le schéma de sortie est défini avec Zod dans :
+
+lib/ai/job-analysis-schema.ts
+Données extraites par l’IA
+
+Une analyse contient notamment :
+
+summary
+requiredSkills
+niceToHaveSkills
+experienceLevel
+remotePolicy
+salaryMentioned
+redFlags
+positiveSignals
+
+Exemples :
+
+experienceLevel:
+internship | junior | mid | senior | unknown
+
+remotePolicy:
+on_site | hybrid | full_remote | unknown
+Mode fake IA
+
+Le projet prévoit un mode fake pour éviter les appels API inutiles :
+
+USE_FAKE_AI=true
+
+En fake mode :
+
+pas d’appel OpenAI
+pas de consommation de tokens
+analyse simulée
+pipeline testable localement
+Mode réel
+
+En mode réel :
+
+USE_FAKE_AI=false
+
+L’application appelle OpenAI via le Vercel AI SDK.
+
+La clé API est stockée uniquement côté serveur :
+
+OPENAI_API_KEY="your_api_key_here"
+
+Elle ne doit jamais être exposée côté frontend ni commitée.
+
+Métadonnées IA
+
+Chaque analyse stocke aussi :
+
+analysisMode
+modelName
+inputTokens
+outputTokens
+totalTokens
+
+L’interface affiche :
+
+le mode d’analyse ;
+le modèle utilisé ;
+le nombre de tokens consommés ;
+une estimation indicative du coût de la requête.
+
+L’estimation du coût est calculée dans :
+
+lib/ai/estimate-ai-cost.ts
+Modèles Prisma actuels
+
+Le projet contient notamment :
+
 JobOffer
 ScrapingRun
-```
-
-### JobOffer
+JobAnalysis
+JobOffer
 
 Représente une offre d’emploi stockée en base.
 
 Champs importants :
 
-```txt
 title
 company
 location
@@ -428,355 +482,375 @@ description
 source
 url
 scrapedAt
+qualityScore
+qualityIssues
 createdAt
 updatedAt
-```
 
-Le champ `url` est unique.
+Le champ url est unique.
 
-Cela permet d’éviter les doublons simples :
-
-```txt
-une URL = une offre
-```
-
-### ScrapingRun
+ScrapingRun
 
 Représente une session de scraping ou d’import.
 
 Champs importants :
 
-```txt
 source
 status
 offersCount
 startedAt
 finishedAt
 errorMessage
-```
 
-Cela permet de tracer les imports et de savoir :
+Cela permet de tracer les imports.
 
-- quand un import a été lancé ;
-- combien d’offres ont été traitées ;
-- si l’import a réussi ou échoué ;
-- quelle erreur s’est produite.
+JobAnalysis
 
----
+Représente une analyse IA associée à une offre.
 
-## Pages disponibles
+Champs importants :
 
-### Accueil des offres
+jobOfferId
+summary
+requiredSkills
+niceToHaveSkills
+experienceLevel
+remotePolicy
+salaryMentioned
+redFlags
+positiveSignals
+analysisMode
+modelName
+inputTokens
+outputTokens
+totalTokens
+createdAt
+updatedAt
 
-```txt
+Pour l’instant :
+
+une offre = une analyse IA maximum
+
+La relation est assurée avec :
+
+jobOfferId unique
+Pages disponibles
+Liste des offres
 /offers
-```
 
 Affiche les offres stockées en base PostgreSQL.
 
-### Détail d’une offre
-
-```txt
+Détail d’une offre
 /offers/[id]
-```
 
-Affiche le détail d’une offre depuis PostgreSQL.
+Affiche :
 
-### Historique des imports
-
-```txt
+les informations principales de l’offre ;
+la description ;
+l’analyse IA si elle existe ;
+les compétences requises ;
+les compétences bonus ;
+les signaux positifs ;
+les points de vigilance ;
+les métadonnées IA ;
+un bouton pour générer ou relancer l’analyse.
+Historique des imports
 /scraping-runs
-```
 
-Affiche les dernières sessions d’import ou de scraping enregistrées en base.
+Affiche les dernières sessions d’import.
 
----
+Dashboard qualité
+/data-quality
 
-## Installation du projet
+Affiche les statistiques de qualité des données.
 
-### 1. Installer les dépendances
+Page dynamique fictive
+/fake-dynamic-jobs
 
-```bash
+Sert à tester le scraping dynamique avec Playwright.
+
+Installation du projet
+1. Installer les dépendances
 npm install
-```
+2. Configurer les variables d’environnement
 
-### 2. Configurer les variables d’environnement
+Copier .env.example vers .env.local.
 
-Copier `.env.example` vers `.env` ou `.env.local`.
+Exemple :
 
-Exemple de configuration locale :
-
-```env
 DATABASE_URL="postgresql://jobradar:jobradar_password@localhost:5432/jobradar"
-```
+OPENAI_API_KEY="your_api_key_here"
+USE_FAKE_AI=true
+USE_FAKE_SCRAPER=true
 
-Ne jamais committer `.env` ou `.env.local`.
+Ne jamais committer :
+
+.env
+.env.local
 
 Le dépôt doit seulement contenir :
 
-```txt
 .env.example
-```
+Lancer PostgreSQL en local
 
----
-
-## Lancer PostgreSQL en local
-
-Le projet utilise Docker Compose pour lancer PostgreSQL.
+Le projet utilise Docker Compose.
 
 Commande :
 
-```bash
 docker compose up -d
-```
 
 Vérifier que le conteneur tourne :
 
-```bash
 docker ps
-```
 
-Le conteneur PostgreSQL devrait être accessible sur :
+PostgreSQL est accessible sur :
 
-```txt
 localhost:5432
-```
-
----
-
-## Prisma
-
-### Générer le client Prisma
-
-```bash
+Prisma
+Générer le client Prisma
 npm run db:generate
-```
 
 Ou directement :
 
-```bash
 npx prisma generate
-```
-
-Cette commande génère le client TypeScript Prisma à partir de `schema.prisma`.
-
-### Lancer les migrations
-
-```bash
+Lancer les migrations
 npm run db:migrate
-```
 
 Ou directement :
 
-```bash
 npx prisma migrate dev
-```
-
-### Ouvrir Prisma Studio
-
-```bash
+Ouvrir Prisma Studio
 npm run db:studio
-```
 
 Ou directement :
 
-```bash
 npx prisma studio
-```
+Important après modification du schema Prisma
 
-Prisma Studio permet de visualiser les tables et les données dans le navigateur.
+Après une migration ou une modification de relation, relancer :
 
----
+npx prisma generate
 
-## Scripts disponibles
+Puis redémarrer le serveur Next.js :
 
-### Lancer le serveur Next.js
-
-```bash
+Ctrl + C
 npm run dev
-```
 
-### Scraping statique
+Si le cache Next pose problème :
 
-```bash
+Remove-Item .next -Recurse -Force
+npm run dev
+Scripts disponibles
+Lancer le serveur Next.js
+npm run dev
+Lancer le build
+npm run build
+Scraping statique
 npm run scrape:static
-```
 
 Génère :
 
-```txt
 data/scraped-jobs.json
-```
-
-### Scraping dynamique
-
-```bash
+Scraping dynamique
 npm run scrape:dynamic
-```
 
 Génère :
 
-```txt
 data/dynamic-scraped-jobs.json
-```
-
-### Importer les offres JSON en base
-
-```bash
+Importer les offres JSON en base
 npm run db:import:scraped
-```
 
 Ce script :
 
-```txt
 lit les fichiers JSON
-→ crée une ligne ScrapingRun
-→ insère ou met à jour les offres avec upsert
-→ évite les doublons via l’URL unique
-```
-
-### Ouvrir Prisma Studio
-
-```bash
+nettoie les offres
+déduplique les offres
+analyse la qualité
+crée une ligne ScrapingRun
+insère ou met à jour les offres avec upsert
+stocke qualityScore et qualityIssues
+Ouvrir Prisma Studio
 npm run db:studio
-```
+Scripts de test IA
+npm run ai:test
+npm run ai:test:save
 
-### Lancer le build
+Ces scripts servent à tester l’analyse IA hors interface.
 
-```bash
-npm run build
-```
+Pipeline de développement local
 
----
+Pour lancer l’application :
 
-## Pipeline de développement actuel
-
-Pour lancer le projet localement :
-
-```bash
 docker compose up -d
 npm run dev
-```
 
 Pour refaire tout le pipeline de données :
 
-```bash
 npm run scrape:static
 npm run scrape:dynamic
 npm run db:import:scraped
-```
 
 Puis consulter :
 
-```txt
 http://localhost:3000/offers
 http://localhost:3000/scraping-runs
-```
+http://localhost:3000/data-quality
+Tester l’analyse IA
+En fake mode
 
----
+Dans .env.local :
 
-## Variables d’environnement
+USE_FAKE_AI=true
 
-Exemple de `.env.example` :
+Puis :
 
-```env
+npm run dev
+
+Sur une page détail :
+
+/offers/[id]
+
+Cliquer sur :
+
+Analyser avec IA fake
+En mode réel
+
+Dans .env.local :
+
+USE_FAKE_AI=false
+
+Redémarrer le serveur :
+
+Ctrl + C
+npm run dev
+
+Puis relancer l’analyse sur une seule offre.
+
+Repasser ensuite en fake mode pour éviter les appels involontaires :
+
+USE_FAKE_AI=true
+Variables d’environnement
+
+Exemple de .env.example :
+
 DATABASE_URL="postgresql://USER:PASSWORD@localhost:5432/DATABASE_NAME"
+OPENAI_API_KEY="your_api_key_here"
 USE_FAKE_AI=true
 USE_FAKE_SCRAPER=true
-```
 
-Pour le développement local actuel :
+Variables principales :
 
-```env
-DATABASE_URL="postgresql://jobradar:jobradar_password@localhost:5432/jobradar"
-```
+DATABASE_URL
+→ connexion PostgreSQL
 
-Ne jamais stocker de vraies clés API dans le dépôt.
+OPENAI_API_KEY
+→ clé API OpenAI côté serveur uniquement
 
----
+USE_FAKE_AI
+→ true pour fake mode, false pour vrai appel LLM
 
-## Sécurité et garde-fous
+USE_FAKE_SCRAPER
+→ réservé aux futurs tests autour du scraping
+Sécurité et garde-fous
 
 Le projet respecte plusieurs règles :
 
-- ne pas committer `.env` ou `.env.local` ;
-- ne pas exposer de clés API côté frontend ;
-- ne pas scraper de sources sensibles au début ;
-- éviter LinkedIn, Indeed, Google Jobs, Instagram et les sites avec login ;
-- travailler d’abord sur des pages fictives ou contrôlées ;
-- limiter les appels réseau agressifs ;
-- garder les futures actions d’agent sous contrôle humain.
+ne pas committer .env ou .env.local ;
+ne pas exposer de clé API côté frontend ;
+ne pas appeler automatiquement l’IA sur toutes les offres ;
+déclencher l’analyse IA manuellement ;
+stocker les analyses pour éviter les appels répétés ;
+afficher le mode fake ou réel dans l’interface ;
+afficher les tokens consommés ;
+estimer le coût de la requête ;
+ne pas scraper de sources sensibles au début ;
+éviter LinkedIn, Indeed, Google Jobs, Instagram et les sites avec login ;
+travailler d’abord sur des pages fictives ou contrôlées ;
+garder les futures actions d’agent sous contrôle humain.
+Sources de données
 
----
-
-## Sources de données
-
-Pour l’instant, les sources sont volontairement fictives ou locales.
+Pour l’instant, les sources sont fictives ou locales.
 
 Cela permet d’apprendre :
 
-- la structure d’un scraper ;
-- l’extraction de données ;
-- les limites de Cheerio ;
-- l’usage de Playwright ;
-- la transformation des données ;
-- le stockage en base ;
+la structure d’un scraper ;
+l’extraction de données ;
+les limites de Cheerio ;
+l’usage de Playwright ;
+la transformation des données ;
+le stockage en base ;
+l’analyse IA structurée ;
 
 sans dépendre de sites externes, de protections anti-bot ou de conditions d’utilisation complexes.
 
----
-
-## Choix techniques importants
-
-### Next.js App Router
+Choix techniques importants
+Next.js App Router
 
 Le projet utilise Next.js avec App Router pour apprendre une structure moderne d’application React fullstack.
 
-### Cheerio avant Playwright
+Server Components et Server Actions
+
+Les pages lisent les données côté serveur.
+
+Les actions sensibles, comme l’analyse IA, passent par une Server Action afin de garder :
+
+Prisma
+OpenAI
+variables d’environnement
+logique métier
+
+côté serveur.
+
+Cheerio avant Playwright
 
 Cheerio a été utilisé d’abord parce qu’il est plus simple pour comprendre :
 
-- le HTML ;
-- le DOM ;
-- les sélecteurs CSS ;
-- l’extraction de texte.
-
-### Playwright ensuite
+le HTML ;
+le DOM ;
+les sélecteurs CSS ;
+l’extraction de texte.
+Playwright ensuite
 
 Playwright a été ajouté pour gérer les pages dynamiques qui chargent leur contenu avec JavaScript.
 
-### PostgreSQL + Prisma
+PostgreSQL + Prisma
 
 PostgreSQL a été choisi pour préparer une base solide avant les futures étapes IA et RAG.
 
 Prisma apporte :
 
-- migrations ;
-- typage TypeScript ;
-- client de base de données ;
-- requêtes plus sûres ;
-- `upsert`.
+migrations ;
+typage TypeScript ;
+client de base de données ;
+relations ;
+upsert.
+Zod pour les structured outputs
 
-### Pas encore d’IA
+Zod permet de définir un schéma de sortie attendu pour l’analyse IA.
 
-L’IA n’est pas encore intégrée volontairement.
+L’objectif est d’éviter d’utiliser directement une réponse libre du LLM.
 
-Avant d’ajouter un LLM, le projet doit avoir :
+Le flux est :
 
-```txt
-données stockées
-→ données nettoyées
-→ données normalisées
-→ données traçables
-```
+LLM
+→ objet structuré
+→ validation Zod
+→ stockage PostgreSQL
+→ affichage UI
+Mode fake IA
 
----
+Le fake mode permet de tester le pipeline sans consommer l’API.
 
-## Organisation Git recommandée
+Il est utile pour :
+
+développer l’UI ;
+tester les Server Actions ;
+éviter les coûts inutiles ;
+travailler sans clé API.
+Organisation Git recommandée
 
 Le projet suit une organisation proche d’un workflow professionnel :
 
-```txt
 main
 → branche stable et montrable
 
@@ -785,227 +859,171 @@ develop
 
 feature/...
 → branches de travail par module
-```
 
-Exemple :
+Exemples :
 
-```txt
 feature/module-4-postgresql-prisma
-```
+feature/module-5-data-cleaning
+feature/module-6-llm-structured-extraction
 
 Workflow :
 
-```txt
 1. partir de develop
 2. créer une branche feature
 3. travailler dessus
 4. commit régulièrement
 5. merger dans develop quand le module est stable
 6. merger develop dans main quand la version est montrable
-```
-
----
-
-## Commandes Git utiles
+Commandes Git utiles
 
 Vérifier l’état :
 
-```bash
 git status
-```
 
 Voir les derniers commits :
 
-```bash
 git log --oneline --decorate -5
-```
 
 Créer une branche de module :
 
-```bash
 git checkout develop
 git pull origin develop
 git checkout -b feature/nom-du-module
 git push -u origin feature/nom-du-module
-```
 
----
+Commit recommandé pour le Module 6 :
 
-## Roadmap
-
-### Module 1 — Next.js minimum viable
+git add .
+git commit -m "feat(ai): add structured job analysis"
+git push
+Roadmap
+Module 1 — Next.js minimum viable
 
 Statut : terminé.
 
 Objectif :
 
-```txt
 Créer une interface simple affichant des offres fictives.
-```
-
-### Module 2 — Scraping statique avec Cheerio
+Module 2 — Scraping statique avec Cheerio
 
 Statut : terminé.
 
 Objectif :
 
-```txt
 Extraire des offres depuis du HTML local contrôlé.
-```
-
-### Module 3 — Scraping dynamique avec Playwright
+Module 3 — Scraping dynamique avec Playwright
 
 Statut : terminé.
 
 Objectif :
 
-```txt
 Automatiser un navigateur pour récupérer des données générées par JavaScript.
-```
+Module 4 — PostgreSQL + Prisma
 
-### Module 4 — PostgreSQL + Prisma
-
-Statut : en cours de finalisation / fonctionnel.
+Statut : terminé.
 
 Objectif :
 
-```txt
 Stocker les offres en base et les lire depuis l’application.
-```
+Module 5 — Nettoyage, normalisation et dédoublonnage
 
-### Module 5 — Nettoyage, normalisation et dédoublonnage
-
-Statut : à venir.
+Statut : terminé.
 
 Objectif :
 
-```txt
 Améliorer la qualité des données avant l’analyse IA.
-```
+Module 6 — LLM structured extraction
 
-À prévoir :
-
-- normalisation des URLs ;
-- nettoyage des descriptions ;
-- détection plus robuste des skills ;
-- meilleure déduplication ;
-- gestion des champs manquants ;
-- logs d’anomalies.
-
-### Module 6 — LLM structured extraction
-
-Statut : à venir.
+Statut : terminé.
 
 Objectif :
 
-```txt
 Utiliser un LLM pour extraire des informations structurées depuis les offres.
-```
-
-### Module 7 — Scoring par rapport au profil
+Module 7 — Scoring par rapport au profil
 
 Statut : à venir.
 
 Objectif :
 
-```txt
 Comparer les offres au profil candidat.
-```
-
-### Module 8 — RAG sur les offres
+Module 8 — RAG sur les offres
 
 Statut : à venir.
 
 Objectif :
 
-```txt
 Poser des questions en langage naturel sur les offres stockées.
-```
-
-### Module 9 — Agent avec tools contrôlés
+Module 9 — Agent avec tools contrôlés
 
 Statut : à venir.
 
 Objectif :
 
-```txt
 Créer un agent capable d’utiliser des tools limités et validés.
-```
-
-### Module 10 — Qualité, sécurité, README et portfolio
+Module 10 — Qualité, sécurité, README et portfolio
 
 Statut : à venir.
 
 Objectif :
 
-```txt
 Rendre le projet présentable en entretien.
-```
+Prochaines étapes techniques
 
----
-
-## Prochaines étapes techniques
-
-Après le Module 4, la suite logique est le Module 5.
+Après le Module 6, la suite logique est le Module 7.
 
 Priorités :
 
-```txt
-1. normaliser les URLs
-2. améliorer la détection des doublons
-3. nettoyer les descriptions
-4. améliorer la détection des compétences
-5. ajouter des logs d’anomalies
-6. préparer les données pour l’analyse IA
-```
+1. créer un profil candidat simple
+2. définir les compétences maîtrisées
+3. définir les compétences en apprentissage
+4. définir les préférences de contrat / remote / localisation
+5. créer un score de compatibilité
+6. afficher ce score sur les offres
+7. trier ou filtrer les offres par pertinence
 
 On ne commence pas encore par le RAG ou les agents.
 
----
-
-## Ce que ce projet montre en entretien
+Ce que ce projet montre en entretien
 
 Ce projet permet d’expliquer :
 
-- pourquoi commencer avec des données fictives ;
-- comment fonctionne le scraping statique ;
-- pourquoi Playwright est utile pour les pages dynamiques ;
-- pourquoi stocker les données en base ;
-- comment éviter les doublons avec une contrainte unique ;
-- comment fonctionne Prisma ;
-- comment utiliser des migrations ;
-- comment structurer un pipeline de données ;
-- pourquoi nettoyer les données avant de les envoyer à un LLM ;
-- quelles limites juridiques et techniques existent autour du scraping ;
-- comment préparer progressivement une application IA sérieuse.
-
----
-
-## Limites actuelles
+pourquoi commencer avec des données fictives ;
+comment fonctionne le scraping statique ;
+pourquoi Playwright est utile pour les pages dynamiques ;
+pourquoi stocker les données en base ;
+comment éviter les doublons ;
+comment fonctionne Prisma ;
+comment utiliser des migrations ;
+pourquoi nettoyer les données avant de les envoyer à un LLM ;
+comment utiliser un LLM pour produire une sortie structurée ;
+pourquoi valider cette sortie avec Zod ;
+comment stocker une analyse IA en base ;
+comment éviter les appels API inutiles ;
+comment suivre les tokens et estimer les coûts ;
+quelles limites juridiques et techniques existent autour du scraping ;
+comment préparer progressivement une application IA sérieuse.
+Limites actuelles
 
 Le projet est encore pédagogique.
 
 Limites connues :
 
-- les sources sont fictives ou locales ;
-- la déduplication est encore simple ;
-- les skills sont détectées par dictionnaire basique ;
-- il n’y a pas encore d’interface d’administration ;
-- il n’y a pas encore d’analyse IA ;
-- il n’y a pas encore de RAG ;
-- il n’y a pas encore d’agent ;
-- il n’y a pas encore de vraie gestion utilisateur ;
-- il n’y a pas encore de déploiement production finalisé.
+les sources sont fictives ou locales ;
+les données ne viennent pas encore de vraies APIs ou sources publiques ;
+l’analyse IA dépend fortement de la qualité du prompt ;
+l’estimation de coût est indicative ;
+il n’y a pas encore de scoring candidat ;
+il n’y a pas encore de RAG ;
+il n’y a pas encore d’agent ;
+il n’y a pas encore de gestion utilisateur ;
+il n’y a pas encore de déploiement production finalisé.
 
 Ces limites sont volontaires : le projet avance module par module.
 
----
-
-## Notes pour le développement
+Notes pour le développement
 
 Avec Prisma 7, la configuration est séparée :
 
-```txt
 prisma/schema.prisma
 → modèles, enums, relations
 
@@ -1014,13 +1032,16 @@ prisma.config.ts
 
 lib/prisma.ts
 → PrismaClient utilisé par le code applicatif
-```
 
 Le projet utilise aussi un adapter PostgreSQL pour Prisma Client.
 
----
+Après modification de schema.prisma, penser à :
 
-## Licence
+npx prisma generate
+
+Puis redémarrer le serveur Next.js.
+
+Licence
 
 Projet personnel pédagogique et portfolio.
 
