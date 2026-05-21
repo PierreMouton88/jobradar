@@ -10,9 +10,10 @@ L’objectif est de construire progressivement une application capable de :
 - analyser les offres avec un LLM ;
 - valider les sorties IA avec Zod ;
 - tracer les coûts et les tokens consommés ;
-- préparer ensuite du scoring, du RAG et des agents contrôlés.
+- comparer les offres à un profil candidat ;
+- préparer ensuite du RAG et des agents contrôlés.
 
-Le projet avance module par module afin de rester compréhensible et explicable en entretien.
+Le projet avance module par module afin de rester compréhensible, maintenable et explicable en entretien.
 
 ---
 
@@ -37,6 +38,7 @@ Module 3 — Scraping dynamique avec Playwright
 Module 4 — PostgreSQL + Prisma
 Module 5 — Nettoyage, normalisation, déduplication et qualité des données
 Module 6 — Analyse LLM structurée avec Zod et OpenAI
+Module 7 — Scoring par rapport au profil candidat
 
 Le pipeline fonctionnel actuel est :
 
@@ -50,9 +52,11 @@ pages fictives / sources contrôlées
 → affichage Next.js
 → analyse IA manuelle d’une offre
 → stockage de l’analyse IA
-→ affichage des résultats et des métadonnées IA
+→ scoring par rapport au profil candidat
+→ affichage du score
+→ tri des offres par pertinence
 
-Les parties RAG, embeddings, scoring candidat et agents ne sont pas encore implémentées.
+Les parties RAG, embeddings, pgvector et agents ne sont pas encore implémentées.
 
 Objectif pédagogique
 
@@ -71,7 +75,9 @@ comment éviter les doublons ;
 comment utiliser un LLM pour produire une analyse structurée ;
 pourquoi valider les sorties IA avec Zod ;
 comment tracer les tokens et les coûts d’une analyse IA ;
-comment construire un projet explicable en entretien.
+pourquoi ne pas tout confier au LLM ;
+comment créer un scoring explicable avec du TypeScript ;
+comment construire un projet présentable en entretien.
 Stack technique
 Frontend / fullstack
 Next.js avec App Router
@@ -96,8 +102,13 @@ Mode fake IA avec USE_FAKE_AI
 Stockage des analyses IA en base
 Suivi des tokens consommés
 Estimation indicative du coût par requête
+Scoring
+Profil candidat statique en TypeScript
+Règles de scoring déterministes
+Score de compatibilité
+Explications positives et points de vigilance
+Tri des offres par pertinence
 Prévu plus tard
-scoring par rapport au profil candidat ;
 embeddings ;
 pgvector ;
 RAG ;
@@ -111,6 +122,9 @@ jobradar-ia/
 │  │     ├─ page.tsx
 │  │     ├─ actions.ts
 │  │     └─ AnalyzeSubmitButton.tsx
+│  │
+│  ├─ profile/
+│  │  └─ page.tsx
 │  │
 │  ├─ fake-dynamic-jobs/
 │  │  └─ page.tsx
@@ -142,6 +156,12 @@ jobradar-ia/
 │  │  ├─ offer-normalization.ts
 │  │  └─ offer-quality.ts
 │  │
+│  ├─ profile/
+│  │  └─ candidate-profile.ts
+│  │
+│  ├─ scoring/
+│  │  └─ score-job-offer.ts
+│  │
 │  ├─ scraping/
 │  │  ├─ static-job-parser.ts
 │  │  ├─ static-job-parser.test-data.ts
@@ -159,7 +179,8 @@ jobradar-ia/
 │  ├─ import-scraped-jobs.ts
 │  ├─ test-cleaning.ts
 │  ├─ test-job-analysis.ts
-│  └─ test-analyze-and-save-job-offer.ts
+│  ├─ test-analyze-and-save-job-offer.ts
+│  └─ test-job-scoring.ts
 │
 ├─ types/
 │  └─ job-offer.ts
@@ -214,6 +235,7 @@ export type JobOffer = {
   url: string;
   createdAt: string;
   analysis?: JobAnalysisView | null;
+  score?: JobOfferScore;
 };
 
 Les pages ne lisent pas directement la base ou les JSON. Elles passent par :
@@ -421,10 +443,10 @@ USE_FAKE_AI=true
 
 En fake mode :
 
-pas d’appel OpenAI
-pas de consommation de tokens
-analyse simulée
-pipeline testable localement
+pas d’appel OpenAI ;
+pas de consommation de tokens ;
+analyse simulée ;
+pipeline testable localement.
 Mode réel
 
 En mode réel :
@@ -459,6 +481,100 @@ une estimation indicative du coût de la requête.
 L’estimation du coût est calculée dans :
 
 lib/ai/estimate-ai-cost.ts
+Module 7 — Scoring par rapport au profil candidat
+
+Le septième module ajoute un score de compatibilité entre chaque offre et un profil candidat statique.
+
+L’objectif n’est pas de laisser le LLM décider si une offre est bonne ou mauvaise. Le LLM sert d’abord à extraire des informations structurées depuis l’offre, comme le niveau estimé, la politique remote, les signaux positifs ou les points de vigilance. Le score final est ensuite calculé par du code TypeScript explicite.
+
+Cette approche permet d’avoir un système de recommandation simple, explicable et contrôlable.
+
+Profil candidat
+
+Le profil candidat est défini dans :
+
+lib/profile/candidate-profile.ts
+
+Il contient notamment :
+
+rôle cible
+niveau recherché
+compétences maîtrisées
+compétences en apprentissage
+types de contrat préférés
+préférences remote
+localisations préférées
+
+Le profil utilisé pour calculer le score est visible dans l’application :
+
+/profile
+Scoring
+
+Le scoring est implémenté dans :
+
+lib/scoring/score-job-offer.ts
+
+Les critères pris en compte sont :
+
+compétences demandées dans l’offre
+niveau estimé du poste
+politique remote
+points de vigilance détectés par l’analyse IA
+signaux positifs détectés par l’analyse IA
+type de contrat
+localisation
+présence d’un salaire
+qualité des données scrapées
+présence ou absence d’une analyse IA
+
+Chaque score contient :
+
+score brut
+score maximum
+pourcentage
+label qualitatif
+explications positives
+points de vigilance
+
+Exemples de labels :
+
+Excellent match
+Bon match
+Match moyen
+Faible compatibilité
+
+Les offres sont triées par score de compatibilité dans :
+
+/offers
+
+Le détail du score est visible dans :
+
+/offers/[id]
+Pourquoi le scoring n’est pas confié entièrement au LLM ?
+
+Le LLM est utile pour transformer du texte libre en données structurées. En revanche, la décision de scoring est plus fiable si elle est écrite en TypeScript avec des règles lisibles.
+
+Le fonctionnement actuel est donc :
+
+LLM
+→ extrait les informations depuis l’offre
+
+TypeScript
+→ compare ces informations au profil candidat
+→ calcule un score
+→ explique le résultat
+
+Cela rend le système :
+
+plus prévisible ;
+plus simple à tester ;
+plus facile à modifier ;
+plus défendable en entretien.
+Script de test
+
+Le scoring peut être testé hors interface avec :
+
+npm run score:test
 Modèles Prisma actuels
 
 Le projet contient notamment :
@@ -540,6 +656,8 @@ Liste des offres
 
 Affiche les offres stockées en base PostgreSQL.
 
+Les offres sont enrichies avec un score de compatibilité et triées par pertinence.
+
 Détail d’une offre
 /offers/[id]
 
@@ -547,6 +665,9 @@ Affiche :
 
 les informations principales de l’offre ;
 la description ;
+le score profil détaillé ;
+les explications positives du score ;
+les points de vigilance du score ;
 l’analyse IA si elle existe ;
 les compétences requises ;
 les compétences bonus ;
@@ -554,6 +675,11 @@ les signaux positifs ;
 les points de vigilance ;
 les métadonnées IA ;
 un bouton pour générer ou relancer l’analyse.
+Profil candidat
+/profile
+
+Affiche le profil utilisé pour calculer le score des offres.
+
 Historique des imports
 /scraping-runs
 
@@ -636,7 +762,7 @@ Puis redémarrer le serveur Next.js :
 Ctrl + C
 npm run dev
 
-Si le cache Next pose problème :
+Si le cache Next pose problème sous PowerShell :
 
 Remove-Item .next -Recurse -Force
 npm run dev
@@ -662,13 +788,13 @@ npm run db:import:scraped
 
 Ce script :
 
-lit les fichiers JSON
-nettoie les offres
-déduplique les offres
-analyse la qualité
-crée une ligne ScrapingRun
-insère ou met à jour les offres avec upsert
-stocke qualityScore et qualityIssues
+lit les fichiers JSON ;
+nettoie les offres ;
+déduplique les offres ;
+analyse la qualité ;
+crée une ligne ScrapingRun ;
+insère ou met à jour les offres avec upsert ;
+stocke qualityScore et qualityIssues.
 Ouvrir Prisma Studio
 npm run db:studio
 Scripts de test IA
@@ -676,6 +802,11 @@ npm run ai:test
 npm run ai:test:save
 
 Ces scripts servent à tester l’analyse IA hors interface.
+
+Script de test scoring
+npm run score:test
+
+Ce script sert à tester le scoring hors interface.
 
 Pipeline de développement local
 
@@ -693,6 +824,7 @@ npm run db:import:scraped
 Puis consulter :
 
 http://localhost:3000/offers
+http://localhost:3000/profile
 http://localhost:3000/scraping-runs
 http://localhost:3000/data-quality
 Tester l’analyse IA
@@ -780,6 +912,7 @@ l’usage de Playwright ;
 la transformation des données ;
 le stockage en base ;
 l’analyse IA structurée ;
+le scoring profil ;
 
 sans dépendre de sites externes, de protections anti-bot ou de conditions d’utilisation complexes.
 
@@ -792,15 +925,12 @@ Server Components et Server Actions
 
 Les pages lisent les données côté serveur.
 
-Les actions sensibles, comme l’analyse IA, passent par une Server Action afin de garder :
+Les actions sensibles, comme l’analyse IA, passent par une Server Action afin de garder côté serveur :
 
-Prisma
-OpenAI
-variables d’environnement
-logique métier
-
-côté serveur.
-
+Prisma ;
+OpenAI ;
+variables d’environnement ;
+logique métier.
 Cheerio avant Playwright
 
 Cheerio a été utilisé d’abord parce qu’il est plus simple pour comprendre :
@@ -847,6 +977,12 @@ développer l’UI ;
 tester les Server Actions ;
 éviter les coûts inutiles ;
 travailler sans clé API.
+Scoring TypeScript explicable
+
+Le scoring n’est pas confié entièrement au LLM.
+
+Le LLM extrait des données structurées, puis le code TypeScript applique des règles métier explicites. Cela rend le score plus lisible, plus testable et plus facile à modifier.
+
 Organisation Git recommandée
 
 Le projet suit une organisation proche d’un workflow professionnel :
@@ -865,6 +1001,7 @@ Exemples :
 feature/module-4-postgresql-prisma
 feature/module-5-data-cleaning
 feature/module-6-llm-structured-extraction
+feature/module-7-profile-scoring
 
 Workflow :
 
@@ -874,14 +1011,10 @@ Workflow :
 4. commit régulièrement
 5. merger dans develop quand le module est stable
 6. merger develop dans main quand la version est montrable
-Commandes Git utiles
 
-Vérifier l’état :
+Commandes Git utiles :
 
 git status
-
-Voir les derniers commits :
-
 git log --oneline --decorate -5
 
 Créer une branche de module :
@@ -891,108 +1024,88 @@ git pull origin develop
 git checkout -b feature/nom-du-module
 git push -u origin feature/nom-du-module
 
-Commit recommandé pour le Module 6 :
+Commit recommandé pour le Module 7 :
 
 git add .
-git commit -m "feat(ai): add structured job analysis"
+git commit -m "feat(scoring): add candidate profile scoring"
 git push
 Roadmap
 Module 1 — Next.js minimum viable
 
 Statut : terminé.
 
-Objectif :
+Objectif : créer une interface simple affichant des offres fictives.
 
-Créer une interface simple affichant des offres fictives.
 Module 2 — Scraping statique avec Cheerio
 
 Statut : terminé.
 
-Objectif :
+Objectif : extraire des offres depuis du HTML local contrôlé.
 
-Extraire des offres depuis du HTML local contrôlé.
 Module 3 — Scraping dynamique avec Playwright
 
 Statut : terminé.
 
-Objectif :
+Objectif : automatiser un navigateur pour récupérer des données générées par JavaScript.
 
-Automatiser un navigateur pour récupérer des données générées par JavaScript.
 Module 4 — PostgreSQL + Prisma
 
 Statut : terminé.
 
-Objectif :
+Objectif : stocker les offres en base et les lire depuis l’application.
 
-Stocker les offres en base et les lire depuis l’application.
 Module 5 — Nettoyage, normalisation et dédoublonnage
 
 Statut : terminé.
 
-Objectif :
+Objectif : améliorer la qualité des données avant l’analyse IA.
 
-Améliorer la qualité des données avant l’analyse IA.
 Module 6 — LLM structured extraction
 
 Statut : terminé.
 
-Objectif :
+Objectif : utiliser un LLM pour extraire des informations structurées depuis les offres.
 
-Utiliser un LLM pour extraire des informations structurées depuis les offres.
 Module 7 — Scoring par rapport au profil
 
-Statut : à venir.
+Statut : terminé.
 
-Objectif :
+Objectif : comparer les offres au profil candidat avec un score explicable.
 
-Comparer les offres au profil candidat.
 Module 8 — RAG sur les offres
 
 Statut : à venir.
 
-Objectif :
+Objectif : poser des questions en langage naturel sur les offres stockées.
 
-Poser des questions en langage naturel sur les offres stockées.
 Module 9 — Agent avec tools contrôlés
 
 Statut : à venir.
 
-Objectif :
+Objectif : créer un agent capable d’utiliser des tools limités et validés.
 
-Créer un agent capable d’utiliser des tools limités et validés.
 Module 10 — Qualité, sécurité, README et portfolio
 
 Statut : à venir.
 
-Objectif :
+Objectif : rendre le projet présentable en entretien.
 
-Rendre le projet présentable en entretien.
 Prochaines étapes techniques
 
-Après le Module 6, la suite logique est le Module 7.
+Après le Module 7, la suite logique est le Module 8.
 
-## Module 7 — Scoring par rapport au profil candidat
+Priorités à venir :
 
-Le Module 7 ajoute un score de compatibilité entre chaque offre et un profil candidat statique.
+1. préparer les textes sources exploitables pour le RAG
+2. comprendre les embeddings
+3. installer/configurer pgvector
+4. créer une table d’embeddings
+5. générer des embeddings pour les offres
+6. créer une recherche vectorielle
+7. construire une interface de questions/réponses
+8. répondre avec les offres sources
 
-L’objectif n’est pas de laisser le LLM décider si une offre est bonne ou mauvaise. Le LLM sert d’abord à extraire des informations structurées depuis l’offre, comme le niveau estimé, la politique remote, les signaux positifs ou les points de vigilance. Le score final est ensuite calculé par du code TypeScript explicite.
-
-Le profil candidat est défini dans :
-
-```txt
-lib/profile/candidate-profile.ts
-
-Priorités :
-
-1. créer un profil candidat simple
-2. définir les compétences maîtrisées
-3. définir les compétences en apprentissage
-4. définir les préférences de contrat / remote / localisation
-5. créer un score de compatibilité
-6. afficher ce score sur les offres
-7. trier ou filtrer les offres par pertinence
-
-On ne commence pas encore par le RAG ou les agents.
+On ne commence pas encore par les agents.
 
 Ce que ce projet montre en entretien
 
@@ -1011,6 +1124,8 @@ pourquoi valider cette sortie avec Zod ;
 comment stocker une analyse IA en base ;
 comment éviter les appels API inutiles ;
 comment suivre les tokens et estimer les coûts ;
+pourquoi ne pas confier toute la décision au LLM ;
+comment créer un score explicable ;
 quelles limites juridiques et techniques existent autour du scraping ;
 comment préparer progressivement une application IA sérieuse.
 Limites actuelles
@@ -1023,7 +1138,8 @@ les sources sont fictives ou locales ;
 les données ne viennent pas encore de vraies APIs ou sources publiques ;
 l’analyse IA dépend fortement de la qualité du prompt ;
 l’estimation de coût est indicative ;
-il n’y a pas encore de scoring candidat ;
+le scoring est indicatif et dépend du profil statique ;
+il n’y a pas encore de profil utilisateur en base ;
 il n’y a pas encore de RAG ;
 il n’y a pas encore d’agent ;
 il n’y a pas encore de gestion utilisateur ;
