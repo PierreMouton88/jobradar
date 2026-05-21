@@ -8,7 +8,7 @@ type OfferListProps = {
 export function OfferList({ offers }: OfferListProps) {
   if (offers.length === 0) {
     return (
-      <p className="mt-6 rounded-lg border p-4 text-sm text-gray-600">
+      <p className="mt-6 rounded-xl border border-dashed border-gray-700 p-6 text-sm text-gray-400">
         Aucune offre à afficher pour le moment. Lance le script de scraping pour
         générer le fichier JSON.
       </p>

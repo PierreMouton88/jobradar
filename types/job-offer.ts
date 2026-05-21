@@ -1,3 +1,5 @@
+import type { JobOfferScore } from "@/lib/scoring/score-job-offer";
+
 export type ContractType =
   | "CDI"
   | "CDD"
@@ -19,6 +21,7 @@ export type JobOffer = {
   url: string;
   createdAt: string;
   analysis?: JobAnalysisView | null;
+  score?: JobOfferScore;
 };
 
 export type JobAnalysisView = {

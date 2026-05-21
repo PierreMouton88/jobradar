@@ -971,6 +971,17 @@ Prochaines étapes techniques
 
 Après le Module 6, la suite logique est le Module 7.
 
+## Module 7 — Scoring par rapport au profil candidat
+
+Le Module 7 ajoute un score de compatibilité entre chaque offre et un profil candidat statique.
+
+L’objectif n’est pas de laisser le LLM décider si une offre est bonne ou mauvaise. Le LLM sert d’abord à extraire des informations structurées depuis l’offre, comme le niveau estimé, la politique remote, les signaux positifs ou les points de vigilance. Le score final est ensuite calculé par du code TypeScript explicite.
+
+Le profil candidat est défini dans :
+
+```txt
+lib/profile/candidate-profile.ts
+
 Priorités :
 
 1. créer un profil candidat simple
