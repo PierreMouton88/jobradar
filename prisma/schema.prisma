@@ -45,6 +45,8 @@ model JobOffer {
 
   analysis JobAnalysis?
 
+  embedding JobOfferEmbedding?
+
   @@index([source])
   @@index([contractType])
   @@index([scrapedAt])
@@ -96,4 +98,21 @@ model JobAnalysis {
   @@index([experienceLevel])
   @@index([remotePolicy])
   @@index([analysisMode])
+}
+
+model JobOfferEmbedding {
+  id String @id @default(cuid())
+
+  jobOfferId String   @unique
+  jobOffer   JobOffer @relation(fields: [jobOfferId], references: [id], onDelete: Cascade)
+
+  content   String
+  embedding Unsupported("vector(1536)")
+
+  modelName String @default("text-embedding-3-small")
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([jobOfferId])
 }
