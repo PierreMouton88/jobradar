@@ -16,14 +16,18 @@
     "ai:test": "tsx scripts/test-job-analysis.ts",
     "ai:test:save": "tsx scripts/test-analyze-and-save-job-offer.ts",
     "score:test": "tsx scripts/test-job-scoring.ts",
+    "rag:check-embeddings": "tsx scripts/check-job-offer-embeddings.ts",
+    "rag:generate-missing-embeddings": "tsx scripts/generate-missing-job-offer-embeddings.ts",
+    "rag:search": "tsx scripts/test-rag-search.ts",
+    "rag:answer": "tsx scripts/test-rag-answer.ts",
+
+
+    
     "rag:test-document": "tsx scripts/test-rag-document.ts",
     "rag:test-db-documents": "tsx scripts/test-rag-documents-from-db.ts",
     "rag:test-embedding": "tsx scripts/test-generate-embedding.ts",
     "rag:create-one-embedding": "tsx scripts/test-create-job-offer-embedding.ts",
-    "rag:generate-some-embeddings": "tsx scripts/generate-some-job-offer-embeddings.ts",
-    "rag:search": "tsx scripts/test-rag-search.ts",
-    "rag:answer": "tsx scripts/test-rag-answer.ts",
-    "rag:check-embeddings": "tsx scripts/check-job-offer-embeddings.ts"
+    "rag:generate-some-embeddings": "tsx scripts/generate-some-job-offer-embeddings.ts"
   },
   "dependencies": {
     "@ai-sdk/openai": "^3.0.64",

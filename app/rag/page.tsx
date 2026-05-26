@@ -1,6 +1,9 @@
 import { RagQuestionForm } from "@/components/rag/RagQuestionForm";
+import { getRagIndexStats } from "@/lib/rag/get-rag-index-stats";
 
-export default function RagPage() {
+export default async function RagPage() {
+  const stats = await getRagIndexStats();
+
   return (
     <main className="mx-auto max-w-3xl space-y-6 p-6">
       <div className="space-y-2">
@@ -29,7 +32,22 @@ export default function RagPage() {
           vectorielle.
         </p>
       </section>
+      <section className="grid gap-3 rounded border p-4 text-sm sm:grid-cols-3">
+        <div>
+          <p className="text-gray-500">Offres totales</p>
+          <p className="text-2xl font-semibold">{stats.totalOffers}</p>
+        </div>
 
+        <div>
+          <p className="text-gray-500">Offres indexées RAG</p>
+          <p className="text-2xl font-semibold">{stats.indexedOffers}</p>
+        </div>
+
+        <div>
+          <p className="text-gray-500">Embeddings manquants</p>
+          <p className="text-2xl font-semibold">{stats.missingEmbeddings}</p>
+        </div>
+      </section>
       <RagQuestionForm />
     </main>
   );
