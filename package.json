@@ -20,6 +20,9 @@
     "rag:generate-missing-embeddings": "tsx scripts/generate-missing-job-offer-embeddings.ts",
     "rag:search": "tsx scripts/test-rag-search.ts",
     "rag:answer": "tsx scripts/test-rag-answer.ts",
+    "agent:test:search": "tsx scripts/test-agent-search-offers.ts",
+    "agent:test": "tsx scripts/test-job-agent.ts",
+    "agent:test:details": "tsx scripts/test-agent-get-offer-details.ts",
 
 
     
