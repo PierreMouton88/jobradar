@@ -5,14 +5,16 @@ JobRadar IA est un projet pédagogique et portfolio autour du scraping, de la st
 L’objectif est de construire progressivement une application capable de :
 
 - récupérer des offres depuis des sources contrôlées ;
-- nettoyer et normaliser les données ;
+- nettoyer, normaliser et dédupliquer les données ;
 - stocker les offres dans PostgreSQL ;
 - analyser les offres avec un LLM ;
 - valider les sorties IA avec Zod ;
 - tracer les coûts et les tokens consommés ;
 - comparer les offres à un profil candidat ;
 - poser des questions sur les offres avec du RAG ;
-- préparer ensuite des agents IA contrôlés.
+- utiliser un agent IA avec des tools contrôlés ;
+- afficher les tools utilisés par l’agent ;
+- garder les actions sensibles sous validation humaine.
 
 Le projet avance module par module afin de rester compréhensible, maintenable et explicable en entretien.
 
@@ -46,6 +48,7 @@ Le projet couvre actuellement :
 - Module 6 — Analyse LLM structurée avec Zod et OpenAI
 - Module 7 — Scoring par rapport au profil candidat
 - Module 8 — RAG sur les offres avec embeddings et pgvector
+- Module 9 — Agent avec tools contrôlés
 
 Le pipeline fonctionnel actuel est :
 
@@ -69,9 +72,11 @@ pages fictives / sources contrôlées
 → recherche vectorielle
 → réponse RAG avec sources
 → interface /rag
+→ agent contrôlé avec tools de lecture
+→ interface /agent
 ```
 
-Les agents IA contrôlés ne sont pas encore implémentés.
+L’agent actuel peut rechercher des offres et consulter le détail d’une offre. Il ne peut pas envoyer de mail, postuler automatiquement, modifier la base, supprimer des données ou lancer un scraping.
 
 ---
 
@@ -98,6 +103,10 @@ L’objectif n’est pas seulement d’obtenir une application fonctionnelle, ma
 - comment stocker des vecteurs avec pgvector ;
 - comment fonctionne une recherche vectorielle ;
 - comment construire une réponse RAG avec sources ;
+- ce qu’est un agent IA ;
+- ce qu’est un tool ;
+- comment un LLM peut appeler des fonctions applicatives ;
+- comment limiter, tracer et sécuriser un agent ;
 - comment construire un projet présentable en entretien.
 
 ---
@@ -133,6 +142,8 @@ L’objectif n’est pas seulement d’obtenir une application fonctionnelle, ma
 - Structured outputs
 - Embeddings OpenAI
 - RAG
+- Tool calling
+- Agent avec tools contrôlés
 - Mode fake IA avec `USE_FAKE_AI`
 - Stockage des analyses IA en base
 - Suivi des tokens consommés
@@ -148,9 +159,9 @@ L’objectif n’est pas seulement d’obtenir une application fonctionnelle, ma
 
 ### Prévu plus tard
 
-- agents IA avec tools contrôlés ;
-- logs d’utilisation des tools ;
-- actions sensibles avec validation humaine ;
+- refactor des types agent ;
+- génération de brouillon de candidature ;
+- actions sensibles avec confirmation humaine explicite ;
 - amélioration UI / portfolio ;
 - éventuel déploiement.
 
@@ -175,6 +186,11 @@ jobradar-ia/
 │  │  ├─ page.tsx
 │  │  ├─ actions.ts
 │  │  └─ RagQuestionForm.tsx
+│  │
+│  ├─ agent/
+│  │  ├─ page.tsx
+│  │  ├─ actions.ts
+│  │  └─ AgentQuestionForm.tsx
 │  │
 │  ├─ fake-dynamic-jobs/
 │  │  └─ page.tsx
@@ -220,6 +236,13 @@ jobradar-ia/
 │  │  ├─ answer-question-about-offers.ts
 │  │  └─ get-rag-index-stats.ts
 │  │
+│  ├─ agent/
+│  │  ├─ search-offers-for-agent.ts
+│  │  ├─ get-offer-details-for-agent.ts
+│  │  ├─ job-agent-tools.ts
+│  │  ├─ summarize-agent-tool-calls.ts
+│  │  └─ run-job-agent.ts
+│  │
 │  ├─ scraping/
 │  │  ├─ static-job-parser.ts
 │  │  ├─ static-job-parser.test-data.ts
@@ -242,7 +265,10 @@ jobradar-ia/
 │  ├─ check-job-offer-embeddings.ts
 │  ├─ generate-missing-job-offer-embeddings.ts
 │  ├─ test-rag-search.ts
-│  └─ test-rag-answer.ts
+│  ├─ test-rag-answer.ts
+│  ├─ test-agent-search-offers.ts
+│  ├─ test-agent-get-offer-details.ts
+│  └─ test-job-agent.ts
 │
 ├─ types/
 │  └─ job-offer.ts
@@ -498,14 +524,6 @@ La page qualité est disponible ici :
 /data-quality
 ```
 
-Elle affiche notamment :
-
-- le nombre total d’offres ;
-- le score qualité moyen ;
-- les offres avec anomalies ;
-- les anomalies les plus fréquentes ;
-- les offres à vérifier en priorité.
-
 ---
 
 ## Module 6 — LLM structured extraction
@@ -691,13 +709,6 @@ Chaque score contient :
 - explications positives ;
 - points de vigilance.
 
-Exemples de labels :
-
-- Excellent match
-- Bon match
-- Match moyen
-- Faible compatibilité
-
 Les offres sont triées par score de compatibilité dans :
 
 ```txt
@@ -726,12 +737,7 @@ TypeScript
 → explique le résultat
 ```
 
-Cela rend le système :
-
-- plus prévisible ;
-- plus simple à tester ;
-- plus facile à modifier ;
-- plus défendable en entretien.
+Cela rend le système plus prévisible, plus simple à tester, plus facile à modifier et plus défendable en entretien.
 
 ### Script de test
 
@@ -794,25 +800,6 @@ La transformation d’une offre en document texte est gérée dans :
 lib/rag/job-offer-rag-document.ts
 ```
 
-L’objectif est de produire un texte propre et stable, par exemple :
-
-```txt
-Titre : Développeur Frontend React Junior
-Entreprise : Atelier Nova
-Lieu : Nancy
-Type de contrat : CDI
-Remote : Oui
-Compétences détectées : React, Next.js, TypeScript
-
-Résumé de l'analyse précédente :
-...
-
-Description :
-...
-```
-
-Ce document est la matière première du RAG.
-
 ### Embeddings
 
 La génération d’embeddings est gérée dans :
@@ -825,12 +812,6 @@ Le projet utilise le provider OpenAI explicite via :
 
 ```ts
 openai.embeddingModel("text-embedding-3-small")
-```
-
-Cela permet d’utiliser directement la variable serveur :
-
-```env
-OPENAI_API_KEY="your_api_key_here"
 ```
 
 ### pgvector
@@ -880,34 +861,6 @@ model JobOfferEmbedding {
 
 Chaque offre peut avoir un embedding associé.
 
-La relation inverse existe dans `JobOffer` :
-
-```prisma
-embedding JobOfferEmbedding?
-```
-
-### Stockage des embeddings
-
-La création ou mise à jour d’un embedding d’offre est gérée dans :
-
-```txt
-lib/rag/create-job-offer-embedding.ts
-```
-
-Prisma ne manipule pas directement le type `vector(1536)` comme un tableau JavaScript classique. Le projet utilise donc du SQL brut via Prisma pour insérer ou mettre à jour le vecteur.
-
-Le tableau JavaScript est converti au format pgvector :
-
-```ts
-const embeddingSql = `[${embedding.join(",")}]`;
-```
-
-Puis inséré avec un cast SQL :
-
-```sql
-::vector
-```
-
 ### Recherche vectorielle
 
 La recherche vectorielle est implémentée dans :
@@ -931,8 +884,6 @@ La comparaison utilise l’opérateur pgvector :
 <=>
 ```
 
-Cet opérateur permet de calculer une distance cosinus entre deux vecteurs.
-
 Plus la distance est faible, plus le document est proche sémantiquement de la question.
 
 ### Réponse RAG
@@ -941,17 +892,6 @@ La génération de réponse est implémentée dans :
 
 ```txt
 lib/rag/answer-question-about-offers.ts
-```
-
-Le flux est :
-
-```txt
-question
-→ recherche vectorielle
-→ sources pertinentes
-→ prompt avec contexte
-→ réponse LLM
-→ sources utilisées
 ```
 
 Le system prompt impose plusieurs règles :
@@ -982,24 +922,6 @@ Elle affiche aussi :
 - la distance vectorielle de chaque source ;
 - un lien vers la page détail de chaque offre source.
 
-### Statistiques de l’index RAG
-
-Les statistiques de l’index sont récupérées avec :
-
-```txt
-lib/rag/get-rag-index-stats.ts
-```
-
-Cela permet d’afficher dans `/rag` :
-
-```txt
-Offres totales
-Offres indexées RAG
-Embeddings manquants
-```
-
-Cette information est importante car le RAG dépend explicitement d’un index vectoriel. Si aucune offre n’est indexée, la recherche RAG ne peut pas produire de sources utiles.
-
 ### Scripts RAG utiles
 
 Vérifier l’état de l’index RAG :
@@ -1008,16 +930,10 @@ Vérifier l’état de l’index RAG :
 npm run rag:check-embeddings
 ```
 
-Générer les embeddings manquants avec une limite par défaut :
+Générer les embeddings manquants :
 
 ```bash
 npm run rag:generate-missing-embeddings
-```
-
-Générer seulement 2 embeddings manquants :
-
-```bash
-npm run rag:generate-missing-embeddings -- --limit=2
 ```
 
 Tester la recherche vectorielle seule :
@@ -1032,31 +948,6 @@ Tester la réponse RAG complète :
 npm run rag:answer
 ```
 
-### Scripts pédagogiques ou de debug
-
-Certains scripts peuvent être conservés pendant l’apprentissage :
-
-```txt
-rag:test-document
-rag:test-db-documents
-rag:test-embedding
-rag:create-one-embedding
-rag:generate-some-embeddings
-```
-
-Ils ont servi à valider progressivement :
-
-```txt
-document RAG
-→ embedding unique
-→ stockage d’un embedding
-→ génération de quelques embeddings
-→ recherche vectorielle
-→ réponse RAG
-```
-
-À terme, ils peuvent être rangés, renommés ou retirés si le projet est préparé pour une démonstration portfolio.
-
 ### Garde-fous RAG
 
 Le RAG ne remplace pas la base de données.
@@ -1070,13 +961,251 @@ Le système demande au modèle de :
 - citer les sources utilisées ;
 - dire quand les sources ne suffisent pas.
 
-Le RAG actuel reste volontairement simple :
+---
 
+## Module 9 — Agent avec tools contrôlés
+
+Le neuvième module ajoute un premier agent IA contrôlé capable d’utiliser des fonctions de l’application comme tools.
+
+L’objectif n’est pas de créer un agent autonome libre. L’objectif est de comprendre le tool calling et de construire un assistant limité, traçable et sécurisé.
+
+Le flux général est :
+
+```txt
+question utilisateur
+→ LLM
+→ choix éventuel d’un tool
+→ exécution du tool côté serveur
+→ retour du résultat au LLM
+→ réponse finale
+→ affichage des tools utilisés
+```
+
+### Différence entre RAG et agent
+
+Le RAG cherche toujours des sources avant de répondre :
+
+```txt
+question
+→ recherche vectorielle
+→ sources
+→ LLM
+→ réponse
+```
+
+L’agent, lui, peut décider d’utiliser un tool selon la demande :
+
+```txt
+question
+→ LLM
+→ tool si nécessaire
+→ résultat du tool
+→ LLM
+→ réponse
+```
+
+Dans le projet, le RAG sert à répondre à partir des documents d’offres indexés. L’agent sert à orchestrer des capacités applicatives contrôlées, comme rechercher des offres ou consulter le détail d’une offre.
+
+### Tools disponibles
+
+Le module introduit deux tools de lecture :
+
+```txt
+searchOffers
+getOfferDetails
+```
+
+#### `searchOffers`
+
+Ce tool recherche des offres dans la base de données à partir d’une requête texte.
+
+Il s’appuie sur :
+
+```txt
+lib/agent/search-offers-for-agent.ts
+```
+
+Il retourne une liste courte d’offres avec notamment :
+
+- identifiant ;
+- titre ;
+- entreprise ;
+- localisation ;
+- contrat ;
+- remote ;
+- compétences ;
+- analyse IA synthétique si disponible.
+
+Le tool ne modifie aucune donnée.
+
+#### `getOfferDetails`
+
+Ce tool récupère le détail d’une offre à partir de son identifiant.
+
+Il s’appuie sur :
+
+```txt
+lib/agent/get-offer-details-for-agent.ts
+```
+
+Il retourne notamment :
+
+- informations principales ;
+- description complète ;
+- URL source ;
+- analyse IA si disponible ;
+- signaux positifs ;
+- points de vigilance.
+
+Le tool ne modifie aucune donnée.
+
+### Déclaration des tools
+
+Les tools sont déclarés dans :
+
+```txt
+lib/agent/job-agent-tools.ts
+```
+
+Chaque tool contient :
+
+- une description lisible par le modèle ;
+- un schéma d’input validé avec Zod ;
+- une fonction `execute` côté serveur.
+
+Exemple conceptuel :
+
+```txt
+LLM
+→ appelle searchOffers avec { query: "React junior" }
+→ le tool valide l’input
+→ Prisma interroge PostgreSQL
+→ le résultat revient au LLM
+```
+
+### Orchestration agentique
+
+La logique principale est centralisée dans :
+
+```txt
+lib/agent/run-job-agent.ts
+```
+
+Cette fonction :
+
+- reçoit une question utilisateur ;
+- appelle le modèle avec les tools disponibles ;
+- limite le nombre d’étapes ;
+- retourne la réponse finale ;
+- retourne les tools utilisés ;
+- retourne l’usage tokens.
+
+La fonction retourne un objet du type :
+
+```txt
+answer
+toolCalls
+usage
+```
+
+Cela permet de réutiliser la même logique depuis un script ou depuis l’interface Next.js.
+
+### Trace des tools utilisés
+
+Les étapes brutes retournées par le SDK sont très verbeuses.
+
+Le projet les transforme en résumé lisible avec :
+
+```txt
+lib/agent/summarize-agent-tool-calls.ts
+```
+
+Exemple d’affichage :
+
+```txt
+Tools utilisés :
+- searchOffers
+  input: { query: "React junior" }
+  résultat: 5 résultat(s)
+
+- getOfferDetails
+  input: { offerId: "..." }
+  résultat: offre trouvée : Développeur Frontend React Junior chez Atelier Nova
+```
+
+Cette trace est importante pour éviter l’effet boîte noire.
+
+### Interface agent
+
+La page agent est disponible ici :
+
+```txt
+/agent
+```
+
+Fichiers principaux :
+
+```txt
+app/agent/page.tsx
+app/agent/actions.ts
+app/agent/AgentQuestionForm.tsx
+```
+
+La page permet de :
+
+- poser une question à l’agent ;
+- afficher la réponse ;
+- afficher les tools utilisés ;
+- afficher les tokens consommés ;
+- rappeler les garde-fous actuels.
+
+### Scripts de test agent
+
+Tester la recherche agent sans LLM :
+
+```bash
+npm run agent:test:search
+```
+
+Tester la récupération du détail d’une offre sans LLM :
+
+```bash
+npm run agent:test:details
+```
+
+Tester l’agent complet avec tool calling :
+
+```bash
+npm run agent:test
+```
+
+### Garde-fous agent
+
+Le module 9 respecte les contraintes suivantes :
+
+- tools de lecture uniquement ;
+- aucun envoi de mail ;
+- aucune candidature automatique ;
+- aucune suppression ou modification de données ;
+- aucun scraping lancé par l’agent ;
+- inputs de tools validés avec Zod ;
+- nombre d’étapes limité ;
+- tools utilisés affichés à l’utilisateur ;
+- fake mode IA possible avec `USE_FAKE_AI`.
+
+### Limites du module agent actuel
+
+L’agent reste volontairement simple :
+
+- pas de mémoire conversationnelle ;
 - pas de chat multi-message ;
 - pas de streaming ;
-- pas d’agent ;
-- pas de génération massive incontrôlée ;
-- pas d’action automatique sensible.
+- pas de brouillon de candidature ;
+- pas d’action sensible ;
+- pas de confirmation humaine encore nécessaire, car aucun tool sensible n’est disponible ;
+- pas de refactor final des types agent pour l’instant.
+
+Ces limites sont volontaires. Le but du module est de comprendre le tool calling et de construire une base contrôlée.
 
 ---
 
@@ -1162,12 +1291,6 @@ Pour l’instant :
 une offre = une analyse IA maximum
 ```
 
-La relation est assurée avec :
-
-```txt
-jobOfferId unique
-```
-
 ### JobOfferEmbedding
 
 Représente le document RAG et l’embedding associés à une offre.
@@ -1185,12 +1308,6 @@ Pour l’instant :
 
 ```txt
 une offre = un embedding maximum
-```
-
-La relation est assurée avec :
-
-```txt
-jobOfferId unique
 ```
 
 ---
@@ -1251,6 +1368,30 @@ Affiche :
 - les sources utilisées ;
 - les distances vectorielles ;
 - les liens vers les offres sources.
+
+### Agent contrôlé
+
+```txt
+/agent
+```
+
+Permet de poser une question à un agent IA contrôlé.
+
+Affiche :
+
+- la réponse de l’agent ;
+- les tools utilisés ;
+- les inputs des tools ;
+- un résumé du résultat des tools ;
+- les tokens consommés ;
+- les garde-fous actuels.
+
+L’agent peut actuellement :
+
+- rechercher des offres avec `searchOffers` ;
+- consulter le détail d’une offre avec `getOfferDetails`.
+
+Il ne peut pas modifier de données, envoyer de mail, postuler automatiquement ou lancer un scraping.
 
 ### Historique des imports
 
@@ -1556,6 +1697,26 @@ Tester la réponse RAG complète :
 npm run rag:answer
 ```
 
+### Scripts agent
+
+Tester la recherche agent sans LLM :
+
+```bash
+npm run agent:test:search
+```
+
+Tester la récupération du détail d’une offre sans LLM :
+
+```bash
+npm run agent:test:details
+```
+
+Tester l’agent complet avec tool calling :
+
+```bash
+npm run agent:test
+```
+
 ---
 
 ## Pipeline de développement local
@@ -1581,6 +1742,7 @@ Puis consulter :
 http://localhost:3000/offers
 http://localhost:3000/profile
 http://localhost:3000/rag
+http://localhost:3000/agent
 http://localhost:3000/scraping-runs
 http://localhost:3000/data-quality
 ```
@@ -1709,6 +1871,82 @@ Quelles offres sont adaptées à un développeur React junior qui veut du télé
 
 ---
 
+## Tester l’agent
+
+L’agent utilise des tools contrôlés côté serveur.
+
+### 1. Tester les fonctions métier sans LLM
+
+Tester la recherche :
+
+```bash
+npm run agent:test:search
+```
+
+Tester la lecture détaillée d’une offre :
+
+```bash
+npm run agent:test:details
+```
+
+### 2. Tester l’agent complet en script
+
+En mode réel :
+
+```env
+USE_FAKE_AI=false
+```
+
+Puis :
+
+```bash
+npm run agent:test
+```
+
+Le script affiche :
+
+- la réponse de l’agent ;
+- les tools utilisés ;
+- les inputs des tools ;
+- un résumé du résultat des tools ;
+- les tokens consommés.
+
+### 3. Tester dans l’interface
+
+Lancer l’application :
+
+```bash
+npm run dev
+```
+
+Puis ouvrir :
+
+```txt
+http://localhost:3000/agent
+```
+
+Exemples de questions :
+
+```txt
+Trouve-moi une offre React junior et détaille la première.
+```
+
+```txt
+Trouve-moi une offre TypeScript débutant.
+```
+
+```txt
+Est-ce que tu peux envoyer une candidature à Atelier Nova ?
+```
+
+Sur une action sensible comme l’envoi d’une candidature, l’agent ne doit pas agir. Aucun tool sensible n’est disponible.
+
+### 4. Fake mode IA
+
+Si `USE_FAKE_AI=true`, l’agent réel n’est pas appelé. Cela évite les appels OpenAI accidentels pendant le développement.
+
+---
+
 ## Variables d’environnement
 
 Exemple de `.env.example` :
@@ -1730,7 +1968,7 @@ OPENAI_API_KEY
 → clé API OpenAI côté serveur uniquement
 
 USE_FAKE_AI
-→ true pour fake mode, false pour vrai appel LLM
+→ true pour fake mode, false pour vrai appel LLM ou agent
 
 USE_FAKE_SCRAPER
 → réservé aux futurs tests autour du scraping
@@ -1752,10 +1990,13 @@ Le projet respecte plusieurs règles :
 - estimer le coût de la requête ;
 - générer les embeddings avec des scripts contrôlés ;
 - éviter les appels API massifs ;
+- limiter les agents à des tools contrôlés ;
+- afficher les tools utilisés par l’agent ;
+- ne pas donner de tool sensible à l’agent sans validation humaine ;
 - ne pas scraper de sources sensibles au début ;
 - éviter LinkedIn, Indeed, Google Jobs, Instagram et les sites avec login ;
 - travailler d’abord sur des pages fictives ou contrôlées ;
-- garder les futures actions d’agent sous contrôle humain.
+- garder les futures actions sensibles d’agent sous contrôle humain.
 
 ---
 
@@ -1774,6 +2015,8 @@ Cela permet d’apprendre :
 - l’analyse IA structurée ;
 - le scoring profil ;
 - le fonctionnement du RAG ;
+- le fonctionnement du tool calling ;
+- la mise en place d’un agent contrôlé ;
 
 sans dépendre de sites externes, de protections anti-bot ou de conditions d’utilisation complexes.
 
@@ -1789,7 +2032,7 @@ Le projet utilise Next.js avec App Router pour apprendre une structure moderne d
 
 Les pages lisent les données côté serveur.
 
-Les actions sensibles, comme l’analyse IA ou la réponse RAG, passent par une Server Action afin de garder côté serveur :
+Les actions coûteuses ou sensibles, comme l’analyse IA, la réponse RAG ou l’appel agentique, passent par une Server Action afin de garder côté serveur :
 
 - Prisma ;
 - OpenAI ;
@@ -1836,13 +2079,11 @@ texte d’offre
 → recherche par similarité
 ```
 
-### Zod pour les structured outputs
+### Zod pour les structured outputs et les tools
 
-Zod permet de définir un schéma de sortie attendu pour l’analyse IA.
+Zod permet de définir un schéma de sortie attendu pour l’analyse IA et un schéma d’entrée attendu pour les tools agent.
 
-L’objectif est d’éviter d’utiliser directement une réponse libre du LLM.
-
-Le flux est :
+Pour l’analyse IA :
 
 ```txt
 LLM
@@ -1850,6 +2091,16 @@ LLM
 → validation Zod
 → stockage PostgreSQL
 → affichage UI
+```
+
+Pour les tools agent :
+
+```txt
+LLM
+→ appel tool avec input
+→ validation Zod
+→ exécution côté serveur
+→ retour du résultat
 ```
 
 ### Mode fake IA
@@ -1885,6 +2136,34 @@ question utilisateur
 → réponse avec citations
 ```
 
+### Agent avec tools contrôlés
+
+L’agent du module 9 n’est pas autonome.
+
+Il reçoit une question, peut appeler seulement les tools déclarés, puis rédige une réponse à partir des résultats.
+
+Les tools actuels sont :
+
+```txt
+searchOffers
+getOfferDetails
+```
+
+Ils sont volontairement limités à la lecture.
+
+Le flux est :
+
+```txt
+question utilisateur
+→ LLM
+→ tool de lecture si nécessaire
+→ résultat du tool
+→ réponse finale
+→ trace des tools utilisés
+```
+
+Cette approche permet d’apprendre le tool calling tout en gardant un cadre sécurisé et explicable.
+
 ---
 
 ## Organisation Git recommandée
@@ -1910,6 +2189,7 @@ feature/module-5-data-cleaning
 feature/module-6-llm-structured-extraction
 feature/module-7-profile-scoring
 feature/module-8-rag
+feature/module-9-agent-tools
 ```
 
 Workflow :
@@ -1937,11 +2217,11 @@ git checkout -b feature/nom-du-module
 git push -u origin feature/nom-du-module
 ```
 
-Commit recommandé pour le Module 8 :
+Commit recommandé pour le Module 9 :
 
 ```bash
 git add .
-git commit -m "feat(rag): add job offer semantic search"
+git commit -m "feat(agent): add controlled job agent tools"
 git push
 ```
 
@@ -1999,7 +2279,7 @@ Objectif : poser des questions en langage naturel sur les offres stockées, avec
 
 ### Module 9 — Agent avec tools contrôlés
 
-Statut : à venir.
+Statut : terminé.
 
 Objectif : créer un agent capable d’utiliser des tools limités et validés.
 
@@ -2013,21 +2293,21 @@ Objectif : rendre le projet présentable en entretien.
 
 ## Prochaines étapes techniques
 
-Après le Module 8, la suite logique est le Module 9.
+Après le Module 9, la suite logique est le Module 10 : qualité, sécurité, README et portfolio.
 
 Priorités à venir :
 
-1. expliquer ce qu’est un agent IA ;
-2. expliquer ce qu’est un tool ;
-3. créer un premier tool de lecture simple, par exemple `searchOffers` ;
-4. éviter toute action sensible au début ;
-5. logger les appels de tools ;
-6. limiter le nombre d’étapes ;
-7. demander confirmation humaine avant toute action sensible.
+1. vérifier le build complet ;
+2. relire les garde-fous de sécurité ;
+3. vérifier que les clés API ne sont jamais exposées côté client ;
+4. nettoyer ou ranger les scripts pédagogiques ;
+5. faire le refactor des types agent si nécessaire ;
+6. préparer des captures d’écran ;
+7. préparer un schéma d’architecture ;
+8. documenter les limites du projet ;
+9. préparer une explication courte pour entretien.
 
-On ne doit pas commencer par un agent autonome complexe.
-
-Le projet doit rester contrôlé, compréhensible et défendable.
+Le brouillon de candidature et les actions sensibles restent volontairement hors du Module 9.
 
 ---
 
@@ -2055,6 +2335,11 @@ Ce projet permet d’expliquer :
 - comment fonctionne une recherche vectorielle ;
 - comment fonctionne un RAG avec sources ;
 - pourquoi le modèle ne connaît pas directement la base ;
+- ce qu’est un agent IA ;
+- ce qu’est un tool ;
+- comment un LLM peut appeler une fonction applicative ;
+- pourquoi limiter les tools disponibles ;
+- comment tracer les tools utilisés ;
 - quelles limites juridiques et techniques existent autour du scraping ;
 - comment préparer progressivement une application IA sérieuse.
 
@@ -2075,7 +2360,9 @@ Limites connues :
 - le RAG fonctionne sur des documents simples, sans chunking avancé ;
 - il n’y a pas encore de chat multi-message ;
 - il n’y a pas encore de streaming de réponse ;
-- il n’y a pas encore d’agent ;
+- l’agent actuel est limité à des tools de lecture ;
+- l’agent n’a pas encore de mémoire conversationnelle ;
+- l’agent ne génère pas encore de brouillon de candidature ;
 - il n’y a pas encore de gestion utilisateur ;
 - il n’y a pas encore de déploiement production finalisé.
 
