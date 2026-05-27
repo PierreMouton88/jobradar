@@ -1,15 +1,8 @@
 import { prisma } from "@/lib/prisma";
 import { generateEmbedding } from "@/lib/rag/generate-embedding";
+import { RagSearchResult } from "@/types/rag";
 
-export type RagSearchResult = {
-  jobOfferId: string;
-  title: string;
-  company: string;
-  location: string;
-  contractType: string;
-  content: string;
-  distance: number;
-};
+
 
 export async function searchJobOffersWithRag(
   query: string,

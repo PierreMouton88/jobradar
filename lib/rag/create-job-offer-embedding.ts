@@ -1,5 +1,3 @@
-import { Prisma } from "@prisma/client";
-
 import { prisma } from "@/lib/prisma";
 import { buildJobOfferRagDocument } from "@/lib/rag/job-offer-rag-document";
 import { generateEmbedding } from "@/lib/rag/generate-embedding";

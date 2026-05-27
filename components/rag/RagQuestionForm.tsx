@@ -3,24 +3,10 @@
 import { useState, useTransition } from "react";
 import Link from "next/link";
 import { askOffersRagQuestion } from "../../app/rag/actions";
-
-type RagSource = {
-  jobOfferId: string;
-  title: string;
-  company: string;
-  location: string;
-  contractType: string;
-  distance: number;
-};
-
-type RagState = {
-  error: string | null;
-  answer: string | null;
-  sources: RagSource[];
-};
+import { RagQuestionState } from "@/types/rag";
 
 export function RagQuestionForm() {
-  const [state, setState] = useState<RagState>({
+  const [state, setState] = useState<RagQuestionState>({
     error: null,
     answer: null,
     sources: [],

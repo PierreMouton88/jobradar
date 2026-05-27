@@ -3,13 +3,9 @@ import { openai } from "@ai-sdk/openai";
 
 import {
   searchJobOffersWithRag,
-  type RagSearchResult,
 } from "@/lib/rag/search-job-offers";
+import { RagAnswerResult, RagSearchResult } from "@/types/rag";
 
-type AnswerQuestionAboutOffersResult = {
-  answer: string;
-  sources: RagSearchResult[];
-};
 
 function buildSourcesContext(results: RagSearchResult[]): string {
   return results
@@ -30,7 +26,7 @@ ${result.content}`;
 
 export async function answerQuestionAboutOffers(
   question: string,
-): Promise<AnswerQuestionAboutOffersResult> {
+): Promise<RagAnswerResult> {
   if (!question.trim()) {
     throw new Error("Question cannot be empty.");
   }

@@ -74,7 +74,7 @@ export default function FakeDynamicJobsPage() {
               <p className="job-contract">{job.contractType}</p>
               <p className="job-description">{job.description}</p>
               <a className="job-url" href={job.url}>
-                Voir l'offre
+                Voir l&apos;offre
               </a>
             </article>
           ))}

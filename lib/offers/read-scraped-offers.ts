@@ -2,7 +2,7 @@ import fs from "node:fs/promises";
 import path from "node:path";
 import { cleanScrapedOffer } from "@/lib/offers/offer-cleaning";
 import type { ScrapedJobOffer } from "../scraping/static-job-parser";
-import { deduplicateOffers, deduplicateOffersWithReport  } from "@/lib/offers/offer-deduplication";
+import {deduplicateOffersWithReport  } from "@/lib/offers/offer-deduplication";
 
 
 export type StoredScrapedJobOffer = ScrapedJobOffer & {

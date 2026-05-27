@@ -3,35 +3,41 @@
   "version": "0.1.0",
   "private": true,
   "scripts": {
-    "dev": "next dev",
-    "build": "next build",
-    "start": "next start",
-    "lint": "eslint",
-    "scrape:static": "tsx lib/scraping/export-static-jobs.ts",
-    "scrape:dynamic": "tsx lib/scraping/export-dynamic-jobs.ts",
-    "db:import:scraped": "tsx scripts/import-scraped-jobs.ts",
-    "db:studio": "prisma studio",
-    "db:migrate": "prisma migrate dev",
-    "db:generate": "prisma generate",
-    "ai:test": "tsx scripts/test-job-analysis.ts",
-    "ai:test:save": "tsx scripts/test-analyze-and-save-job-offer.ts",
-    "score:test": "tsx scripts/test-job-scoring.ts",
-    "rag:check-embeddings": "tsx scripts/check-job-offer-embeddings.ts",
-    "rag:generate-missing-embeddings": "tsx scripts/generate-missing-job-offer-embeddings.ts",
-    "rag:search": "tsx scripts/test-rag-search.ts",
-    "rag:answer": "tsx scripts/test-rag-answer.ts",
-    "agent:test:search": "tsx scripts/test-agent-search-offers.ts",
-    "agent:test": "tsx scripts/test-job-agent.ts",
-    "agent:test:details": "tsx scripts/test-agent-get-offer-details.ts",
+  "dev": "next dev",
+  "build": "next build",
+  "start": "next start",
+  "lint": "eslint",
 
+  "scrape:static": "tsx lib/scraping/export-static-jobs.ts",
+  "scrape:dynamic": "tsx lib/scraping/export-dynamic-jobs.ts",
 
-    
-    "rag:test-document": "tsx scripts/test-rag-document.ts",
-    "rag:test-db-documents": "tsx scripts/test-rag-documents-from-db.ts",
-    "rag:test-embedding": "tsx scripts/test-generate-embedding.ts",
-    "rag:create-one-embedding": "tsx scripts/test-create-job-offer-embedding.ts",
-    "rag:generate-some-embeddings": "tsx scripts/generate-some-job-offer-embeddings.ts"
-  },
+  "db:import:scraped": "tsx scripts/import-scraped-jobs.ts",
+  "db:studio": "prisma studio",
+  "db:migrate": "prisma migrate dev",
+  "db:generate": "prisma generate",
+
+  "ai:test": "tsx scripts/test-job-analysis.ts",
+  "ai:test:save": "tsx scripts/test-analyze-and-save-job-offer.ts",
+
+  "score:test": "tsx scripts/test-job-scoring.ts",
+
+  "rag:check-embeddings": "tsx scripts/check-job-offer-embeddings.ts",
+  "rag:generate-missing-embeddings": "tsx scripts/generate-missing-job-offer-embeddings.ts",
+  "rag:search": "tsx scripts/test-rag-search.ts",
+  "rag:answer": "tsx scripts/test-rag-answer.ts",
+
+  "agent:test:search": "tsx scripts/test-agent-search-offers.ts",
+  "agent:test:details": "tsx scripts/test-agent-get-offer-details.ts",
+  "agent:test": "tsx scripts/test-job-agent.ts",
+
+  
+  "dev:rag:test-document": "tsx scripts/test-rag-document.ts",
+  "dev:rag:test-db-documents": "tsx scripts/test-rag-documents-from-db.ts",
+  "dev:rag:test-embedding": "tsx scripts/test-generate-embedding.ts",
+  "dev:rag:create-one-embedding": "tsx scripts/test-create-job-offer-embedding.ts",
+  "dev:rag:generate-some-embeddings": "tsx scripts/generate-some-job-offer-embeddings.ts"
+},
+
   "dependencies": {
     "@ai-sdk/openai": "^3.0.64",
     "@prisma/adapter-pg": "^7.8.0",

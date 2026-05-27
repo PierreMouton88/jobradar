@@ -46,3 +46,7 @@ CLAUDE.md
 
 /docs
 /lib/generated/prisma
+
+debug/*
+
+.gitignore

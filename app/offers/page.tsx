@@ -8,7 +8,7 @@ export default async function OffersPage() {
   return (
     <main className="mx-auto max-w-4xl p-6">
       <div className="mb-6">
-        <h1 className="text-3xl font-bold text-white">Offres d'emploi</h1>
+        <h1 className="text-3xl font-bold text-white">Offres d&apos;emploi</h1>
         <p className="mt-2 text-gray-400">
           Offres générées depuis le premier scraper statique de JobRadar IA.
         </p>
