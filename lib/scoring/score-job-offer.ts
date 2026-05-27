@@ -2,7 +2,13 @@ import type { CandidateProfile } from "@/lib/profile/candidate-profile";
 
 export type ScorableJobOffer = {
   skills: string[];
-  contractType: "CDI" | "CDD" | "Stage" | "Alternance" | "Freelance" | "Inconnu";
+  contractType:
+    | "CDI"
+    | "CDD"
+    | "Stage"
+    | "Alternance"
+    | "Freelance"
+    | "Inconnu";
   location: string;
   qualityScore?: number;
   analysis?: {
@@ -99,13 +105,13 @@ export function scoreJobOfferSkills(
   const percentage = maxScore === 0 ? 0 : Math.round((score / maxScore) * 100);
 
   return {
-  score,
-  maxScore,
-  percentage,
-  label: getScoreLabel(percentage),
-  positiveExplanations,
-  negativeExplanations,
-};
+    score,
+    maxScore,
+    percentage,
+    label: getScoreLabel(percentage),
+    positiveExplanations,
+    negativeExplanations,
+  };
 }
 
 function scoreExperienceLevel(
@@ -239,7 +245,8 @@ function scoreRemotePolicy(
 
   if (remotePolicy === "on_site") {
     negativeExplanations.push({
-      label: "Poste principalement sur site, moins aligné avec les préférences remote",
+      label:
+        "Poste principalement sur site, moins aligné avec les préférences remote",
       points: -10,
     });
 
@@ -600,10 +607,10 @@ export function scoreJobOffer(
 
   return {
     score,
-  maxScore,
-  percentage,
-  label: getScoreLabel(percentage),
-  positiveExplanations: [
+    maxScore,
+    percentage,
+    label: getScoreLabel(percentage),
+    positiveExplanations: [
       ...skillsScore.positiveExplanations,
       ...levelScore.positiveExplanations,
       ...remoteScore.positiveExplanations,
