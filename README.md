@@ -20,17 +20,25 @@ Le projet avance module par module afin de rester compréhensible, maintenable e
 
 ---
 
-## Pipeline cible
+## Pipeline actuel
 
 ```txt
-scraping
+sources fictives / contrôlées
+→ scraping statique ou dynamique
+→ export JSON temporaire
 → nettoyage / normalisation / déduplication
-→ PostgreSQL
+→ analyse qualité
+→ import PostgreSQL
+→ affichage Next.js
 → analyse LLM structurée
+→ stockage JobAnalysis
 → scoring profil
-→ embeddings + pgvector
-→ RAG
-→ agent contrôlé
+→ documents RAG
+→ embeddings OpenAI
+→ stockage pgvector
+→ recherche vectorielle
+→ réponse RAG avec sources
+→ agent avec tools contrôlés
 → interface Next.js
 ```
 
@@ -40,41 +48,16 @@ scraping
 
 Le projet couvre actuellement :
 
-- Module 1 — Next.js minimum viable
-- Module 2 — Scraping statique avec Cheerio
-- Module 3 — Scraping dynamique avec Playwright
-- Module 4 — PostgreSQL + Prisma
-- Module 5 — Nettoyage, normalisation, déduplication et qualité des données
-- Module 6 — Analyse LLM structurée avec Zod et OpenAI
-- Module 7 — Scoring par rapport au profil candidat
-- Module 8 — RAG sur les offres avec embeddings et pgvector
-- Module 9 — Agent avec tools contrôlés
-
-Le pipeline fonctionnel actuel est :
-
-```txt
-pages fictives / sources contrôlées
-→ scraping statique ou dynamique
-→ export JSON temporaire
-→ nettoyage des données
-→ déduplication
-→ analyse qualité
-→ import PostgreSQL
-→ affichage Next.js
-→ analyse IA manuelle d’une offre
-→ stockage de l’analyse IA
-→ scoring par rapport au profil candidat
-→ affichage du score
-→ tri des offres par pertinence
-→ transformation des offres en documents RAG
-→ génération d’embeddings
-→ stockage pgvector
-→ recherche vectorielle
-→ réponse RAG avec sources
-→ interface /rag
-→ agent contrôlé avec tools de lecture
-→ interface /agent
-```
+- Module 1 — Next.js minimum viable ;
+- Module 2 — Scraping statique avec Cheerio ;
+- Module 3 — Scraping dynamique avec Playwright ;
+- Module 4 — PostgreSQL + Prisma ;
+- Module 5 — Nettoyage, normalisation, déduplication et qualité des données ;
+- Module 6 — Analyse LLM structurée avec Zod et OpenAI ;
+- Module 7 — Scoring par rapport au profil candidat ;
+- Module 8 — RAG sur les offres avec embeddings et pgvector ;
+- Module 9 — Agent avec tools contrôlés ;
+- Passe qualité — refactor ciblé, lint, build et premiers tests unitaires.
 
 L’agent actuel peut rechercher des offres et consulter le détail d’une offre. Il ne peut pas envoyer de mail, postuler automatiquement, modifier la base, supprimer des données ou lancer un scraping.
 
@@ -107,7 +90,10 @@ L’objectif n’est pas seulement d’obtenir une application fonctionnelle, ma
 - ce qu’est un tool ;
 - comment un LLM peut appeler des fonctions applicatives ;
 - comment limiter, tracer et sécuriser un agent ;
+- comment ajouter des tests unitaires sur des fonctions pures ;
 - comment construire un projet présentable en entretien.
+
+Le projet a été construit comme support d’apprentissage avec assistance IA. L’objectif est de comprendre, savoir expliquer, savoir modifier et savoir défendre les choix techniques.
 
 ---
 
@@ -149,21 +135,12 @@ L’objectif n’est pas seulement d’obtenir une application fonctionnelle, ma
 - Suivi des tokens consommés
 - Estimation indicative du coût par requête
 
-### Scoring
+### Qualité
 
-- Profil candidat statique en TypeScript
-- Règles de scoring déterministes
-- Score de compatibilité
-- Explications positives et points de vigilance
-- Tri des offres par pertinence
-
-### Prévu plus tard
-
-- refactor des types agent ;
-- génération de brouillon de candidature ;
-- actions sensibles avec confirmation humaine explicite ;
-- amélioration UI / portfolio ;
-- éventuel déploiement.
+- ESLint
+- Vitest
+- Tests unitaires sur fonctions pures
+- Script global `npm run check`
 
 ---
 
@@ -184,8 +161,7 @@ jobradar-ia/
 │  │
 │  ├─ rag/
 │  │  ├─ page.tsx
-│  │  ├─ actions.ts
-│  │  └─ RagQuestionForm.tsx
+│  │  └─ actions.ts
 │  │
 │  ├─ agent/
 │  │  ├─ page.tsx
@@ -202,25 +178,33 @@ jobradar-ia/
 │     └─ page.tsx
 │
 ├─ components/
-│  └─ offers/
-│     ├─ OfferCard.tsx
-│     ├─ OfferList.tsx
-│     └─ OfferFilters.tsx
+│  ├─ offers/
+│  │  ├─ OfferCard.tsx
+│  │  ├─ OfferList.tsx
+│  │  └─ OfferFilters.tsx
+│  │
+│  └─ rag/
+│     └─ RagQuestionForm.tsx
 │
 ├─ lib/
 │  ├─ ai/
-│  │  ├─ job-analysis-schema.ts
-│  │  ├─ analyze-job-offer.ts
 │  │  ├─ analyze-and-save-job-offer.ts
-│  │  └─ estimate-ai-cost.ts
+│  │  ├─ analyze-job-offer.ts
+│  │  ├─ estimate-ai-cost.ts
+│  │  ├─ estimate-ai-cost.test.ts
+│  │  └─ job-analysis-schema.ts
 │  │
 │  ├─ offers/
 │  │  ├─ get-offers.ts
-│  │  ├─ read-scraped-offers.ts
 │  │  ├─ offer-cleaning.ts
+│  │  ├─ offer-cleaning.test.ts
 │  │  ├─ offer-deduplication.ts
+│  │  ├─ offer-deduplication.test.ts
 │  │  ├─ offer-normalization.ts
-│  │  └─ offer-quality.ts
+│  │  ├─ offer-normalization.test.ts
+│  │  ├─ offer-quality.ts
+│  │  ├─ offer-quality.test.ts
+│  │  └─ read-scraped-offers.ts
 │  │
 │  ├─ profile/
 │  │  └─ candidate-profile.ts
@@ -229,26 +213,26 @@ jobradar-ia/
 │  │  └─ score-job-offer.ts
 │  │
 │  ├─ rag/
-│  │  ├─ job-offer-rag-document.ts
-│  │  ├─ generate-embedding.ts
-│  │  ├─ create-job-offer-embedding.ts
-│  │  ├─ search-job-offers.ts
 │  │  ├─ answer-question-about-offers.ts
-│  │  └─ get-rag-index-stats.ts
+│  │  ├─ create-job-offer-embedding.ts
+│  │  ├─ generate-embedding.ts
+│  │  ├─ get-rag-index-stats.ts
+│  │  ├─ job-offer-rag-document.ts
+│  │  └─ search-job-offers.ts
 │  │
 │  ├─ agent/
-│  │  ├─ search-offers-for-agent.ts
 │  │  ├─ get-offer-details-for-agent.ts
 │  │  ├─ job-agent-tools.ts
-│  │  ├─ summarize-agent-tool-calls.ts
-│  │  └─ run-job-agent.ts
+│  │  ├─ run-job-agent.ts
+│  │  ├─ search-offers-for-agent.ts
+│  │  └─ summarize-agent-tool-calls.ts
 │  │
 │  ├─ scraping/
-│  │  ├─ static-job-parser.ts
-│  │  ├─ static-job-parser.test-data.ts
-│  │  ├─ export-static-jobs.ts
 │  │  ├─ dynamic-job-scraper.ts
-│  │  └─ export-dynamic-jobs.ts
+│  │  ├─ export-dynamic-jobs.ts
+│  │  ├─ export-static-jobs.ts
+│  │  ├─ static-job-parser.test-data.ts
+│  │  └─ static-job-parser.ts
 │  │
 │  └─ prisma.ts
 │
@@ -257,1057 +241,39 @@ jobradar-ia/
 │  └─ migrations/
 │
 ├─ scripts/
-│  ├─ import-scraped-jobs.ts
-│  ├─ test-cleaning.ts
-│  ├─ test-job-analysis.ts
-│  ├─ test-analyze-and-save-job-offer.ts
-│  ├─ test-job-scoring.ts
 │  ├─ check-job-offer-embeddings.ts
 │  ├─ generate-missing-job-offer-embeddings.ts
-│  ├─ test-rag-search.ts
-│  ├─ test-rag-answer.ts
-│  ├─ test-agent-search-offers.ts
+│  ├─ generate-some-job-offer-embeddings.ts
+│  ├─ import-scraped-jobs.ts
 │  ├─ test-agent-get-offer-details.ts
-│  └─ test-job-agent.ts
+│  ├─ test-agent-search-offers.ts
+│  ├─ test-analyze-and-save-job-offer.ts
+│  ├─ test-cleaning.ts
+│  ├─ test-create-job-offer-embedding.ts
+│  ├─ test-generate-embedding.ts
+│  ├─ test-job-agent.ts
+│  ├─ test-job-analysis.ts
+│  ├─ test-job-scoring.ts
+│  ├─ test-rag-answer.ts
+│  ├─ test-rag-document.ts
+│  ├─ test-rag-documents-from-db.ts
+│  └─ test-rag-search.ts
 │
 ├─ types/
-│  └─ job-offer.ts
+│  ├─ job-offer.ts
+│  └─ rag.ts
 │
 ├─ data/
-│  ├─ scraped-jobs.json
-│  └─ dynamic-scraped-jobs.json
+│  ├─ dynamic-scraped-jobs.json
+│  └─ scraped-jobs.json
 │
 ├─ debug/
-│  └─ dynamic-scraping-error.png
+│  └─ .gitkeep
 │
 ├─ docker-compose.yml
 ├─ prisma.config.ts
 ├─ .env.example
 └─ README.md
-```
-
----
-
-## Modules réalisés
-
-## Module 1 — Next.js minimum viable
-
-Le premier module a créé une interface minimale avec Next.js.
-
-Routes principales :
-
-```txt
-/offers
-/offers/[id]
-```
-
-Composants principaux :
-
-```txt
-components/offers/OfferCard.tsx
-components/offers/OfferList.tsx
-components/offers/OfferFilters.tsx
-```
-
-Type principal côté UI :
-
-```ts
-export type ContractType =
-  | "CDI"
-  | "CDD"
-  | "Stage"
-  | "Alternance"
-  | "Freelance"
-  | "Inconnu";
-
-export type JobOffer = {
-  id: string;
-  title: string;
-  company: string;
-  location: string;
-  contractType: ContractType;
-  remote: boolean;
-  skills: string[];
-  description: string;
-  source: string;
-  url: string;
-  createdAt: string;
-  analysis?: JobAnalysisView | null;
-  score?: JobOfferScore;
-};
-```
-
-Les pages ne lisent pas directement la base ou les JSON. Elles passent par :
-
-```txt
-lib/offers/get-offers.ts
-```
-
----
-
-## Module 2 — Scraping statique avec Cheerio
-
-Le deuxième module a introduit le scraping statique.
-
-Objectif :
-
-```txt
-HTML local contrôlé
-→ parsing Cheerio
-→ extraction d’offres
-→ export JSON
-```
-
-Fichiers principaux :
-
-```txt
-lib/scraping/static-job-parser.ts
-lib/scraping/static-job-parser.test-data.ts
-lib/scraping/export-static-jobs.ts
-```
-
-Script npm :
-
-```bash
-npm run scrape:static
-```
-
-Ce script génère :
-
-```txt
-data/scraped-jobs.json
-```
-
-Type brut utilisé par le parser :
-
-```ts
-export type ScrapedJobOffer = {
-  title: string;
-  company: string;
-  location: string;
-  contractType: string;
-  description: string;
-  url: string;
-};
-```
-
----
-
-## Module 3 — Scraping dynamique avec Playwright
-
-Le troisième module a introduit Playwright pour comprendre le scraping de pages générées par JavaScript.
-
-Objectif :
-
-```txt
-page dynamique locale
-→ ouverture avec Playwright
-→ attente du rendu JavaScript
-→ clic sur “Voir plus”
-→ extraction des offres
-→ export JSON
-```
-
-Route locale de test :
-
-```txt
-/fake-dynamic-jobs
-```
-
-Fichiers principaux :
-
-```txt
-lib/scraping/dynamic-job-scraper.ts
-lib/scraping/export-dynamic-jobs.ts
-```
-
-Script npm :
-
-```bash
-npm run scrape:dynamic
-```
-
-Ce script génère :
-
-```txt
-data/dynamic-scraped-jobs.json
-```
-
-En cas d’erreur, un screenshot peut être généré dans :
-
-```txt
-debug/dynamic-scraping-error.png
-```
-
----
-
-## Module 4 — PostgreSQL + Prisma
-
-Le quatrième module a ajouté une vraie base de données.
-
-Objectif :
-
-```txt
-JSON temporaires
-→ import en base PostgreSQL
-→ lecture avec Prisma
-→ affichage dans Next.js
-```
-
-### Pourquoi PostgreSQL ?
-
-Les fichiers JSON sont pratiques pour apprendre, mais limités pour :
-
-- stocker durablement les données ;
-- éviter les doublons proprement ;
-- filtrer et trier efficacement ;
-- garder l’historique des imports ;
-- préparer les futures étapes IA/RAG.
-
-### Pourquoi Prisma ?
-
-Prisma sert d’intermédiaire entre TypeScript et PostgreSQL.
-
-Il apporte :
-
-- un schéma versionné ;
-- des migrations ;
-- un client TypeScript typé ;
-- des requêtes lisibles ;
-- `upsert` pour créer ou mettre à jour une offre selon son URL.
-
----
-
-## Module 5 — Nettoyage, normalisation, déduplication et qualité
-
-Le cinquième module a amélioré la qualité des données avant la couche IA.
-
-Objectif :
-
-```txt
-données brutes
-→ données nettoyées
-→ données normalisées
-→ données dédupliquées
-→ données traçables
-```
-
-Fonctionnalités ajoutées :
-
-- nettoyage des chaînes de caractères ;
-- normalisation des URLs ;
-- suppression des paramètres UTM ;
-- suppression des slashs finaux inutiles ;
-- détection améliorée du télétravail ;
-- détection améliorée des compétences techniques ;
-- déduplication par URL normalisée ;
-- déduplication par clé métier `title + company + location` ;
-- rapport de déduplication ;
-- analyse qualité des offres ;
-- stockage `qualityScore` et `qualityIssues` en base ;
-- page `/data-quality`.
-
-Fichiers principaux :
-
-```txt
-lib/offers/offer-cleaning.ts
-lib/offers/offer-deduplication.ts
-lib/offers/offer-quality.ts
-lib/offers/offer-normalization.ts
-lib/offers/read-scraped-offers.ts
-app/data-quality/page.tsx
-```
-
-La page qualité est disponible ici :
-
-```txt
-/data-quality
-```
-
----
-
-## Module 6 — LLM structured extraction
-
-Le sixième module a ajouté une analyse IA structurée des offres.
-
-Objectif :
-
-```txt
-description d’offre
-→ LLM
-→ objet structuré
-→ validation Zod
-→ stockage PostgreSQL
-→ affichage dans la page détail
-```
-
-L’analyse IA est déclenchée manuellement depuis :
-
-```txt
-/offers/[id]
-```
-
-Le bouton appelle une Server Action Next.js :
-
-```txt
-app/offers/[id]/actions.ts
-```
-
-La logique métier est séparée dans :
-
-```txt
-lib/ai/analyze-and-save-job-offer.ts
-lib/ai/analyze-job-offer.ts
-```
-
-Le schéma de sortie est défini avec Zod dans :
-
-```txt
-lib/ai/job-analysis-schema.ts
-```
-
-### Données extraites par l’IA
-
-Une analyse contient notamment :
-
-- `summary`
-- `requiredSkills`
-- `niceToHaveSkills`
-- `experienceLevel`
-- `remotePolicy`
-- `salaryMentioned`
-- `redFlags`
-- `positiveSignals`
-
-Exemples :
-
-```txt
-experienceLevel:
-internship | junior | mid | senior | unknown
-
-remotePolicy:
-on_site | hybrid | full_remote | unknown
-```
-
-### Mode fake IA
-
-Le projet prévoit un mode fake pour éviter les appels API inutiles :
-
-```env
-USE_FAKE_AI=true
-```
-
-En fake mode :
-
-- pas d’appel OpenAI ;
-- pas de consommation de tokens ;
-- analyse simulée ;
-- pipeline testable localement.
-
-### Mode réel
-
-En mode réel :
-
-```env
-USE_FAKE_AI=false
-```
-
-L’application appelle OpenAI via le Vercel AI SDK.
-
-La clé API est stockée uniquement côté serveur :
-
-```env
-OPENAI_API_KEY="your_api_key_here"
-```
-
-Elle ne doit jamais être exposée côté frontend ni commitée.
-
-### Métadonnées IA
-
-Chaque analyse stocke aussi :
-
-- `analysisMode`
-- `modelName`
-- `inputTokens`
-- `outputTokens`
-- `totalTokens`
-
-L’interface affiche :
-
-- le mode d’analyse ;
-- le modèle utilisé ;
-- le nombre de tokens consommés ;
-- une estimation indicative du coût de la requête.
-
-L’estimation du coût est calculée dans :
-
-```txt
-lib/ai/estimate-ai-cost.ts
-```
-
----
-
-## Module 7 — Scoring par rapport au profil candidat
-
-Le septième module ajoute un score de compatibilité entre chaque offre et un profil candidat statique.
-
-L’objectif n’est pas de laisser le LLM décider si une offre est bonne ou mauvaise. Le LLM sert d’abord à extraire des informations structurées depuis l’offre, comme le niveau estimé, la politique remote, les signaux positifs ou les points de vigilance. Le score final est ensuite calculé par du code TypeScript explicite.
-
-Cette approche permet d’avoir un système de recommandation simple, explicable et contrôlable.
-
-### Profil candidat
-
-Le profil candidat est défini dans :
-
-```txt
-lib/profile/candidate-profile.ts
-```
-
-Il contient notamment :
-
-- rôle cible ;
-- niveau recherché ;
-- compétences maîtrisées ;
-- compétences en apprentissage ;
-- types de contrat préférés ;
-- préférences remote ;
-- localisations préférées.
-
-Le profil utilisé pour calculer le score est visible dans l’application :
-
-```txt
-/profile
-```
-
-### Scoring
-
-Le scoring est implémenté dans :
-
-```txt
-lib/scoring/score-job-offer.ts
-```
-
-Les critères pris en compte sont :
-
-- compétences demandées dans l’offre ;
-- niveau estimé du poste ;
-- politique remote ;
-- points de vigilance détectés par l’analyse IA ;
-- signaux positifs détectés par l’analyse IA ;
-- type de contrat ;
-- localisation ;
-- présence d’un salaire ;
-- qualité des données scrapées ;
-- présence ou absence d’une analyse IA.
-
-Chaque score contient :
-
-- score brut ;
-- score maximum ;
-- pourcentage ;
-- label qualitatif ;
-- explications positives ;
-- points de vigilance.
-
-Les offres sont triées par score de compatibilité dans :
-
-```txt
-/offers
-```
-
-Le détail du score est visible dans :
-
-```txt
-/offers/[id]
-```
-
-### Pourquoi le scoring n’est pas confié entièrement au LLM ?
-
-Le LLM est utile pour transformer du texte libre en données structurées. En revanche, la décision de scoring est plus fiable si elle est écrite en TypeScript avec des règles lisibles.
-
-Le fonctionnement actuel est donc :
-
-```txt
-LLM
-→ extrait les informations depuis l’offre
-
-TypeScript
-→ compare ces informations au profil candidat
-→ calcule un score
-→ explique le résultat
-```
-
-Cela rend le système plus prévisible, plus simple à tester, plus facile à modifier et plus défendable en entretien.
-
-### Script de test
-
-Le scoring peut être testé hors interface avec :
-
-```bash
-npm run score:test
-```
-
----
-
-## Module 8 — RAG sur les offres
-
-Le huitième module ajoute une première recherche RAG sur les offres stockées.
-
-Objectif :
-
-```txt
-question utilisateur
-→ embedding de la question
-→ recherche vectorielle avec pgvector
-→ récupération des offres pertinentes
-→ réponse LLM à partir des sources
-```
-
-Le but est de permettre à l’utilisateur de poser des questions en langage naturel sur les offres, sans prétendre que le modèle connaît directement la base de données.
-
-### Fonctionnement général
-
-Chaque offre est transformée en document texte RAG avec :
-
-- les informations principales de l’offre ;
-- les compétences détectées ;
-- la description ;
-- l’analyse IA structurée si elle existe ;
-- les signaux positifs ;
-- les points de vigilance.
-
-Ce document est ensuite transformé en embedding avec le modèle :
-
-```txt
-text-embedding-3-small
-```
-
-Les embeddings sont stockés dans PostgreSQL avec l’extension `pgvector`.
-
-Quand l’utilisateur pose une question, l’application :
-
-1. génère l’embedding de la question ;
-2. compare cet embedding avec ceux des offres ;
-3. récupère les offres les plus proches ;
-4. injecte ces offres comme sources dans le prompt ;
-5. demande au LLM de répondre uniquement à partir de ces sources.
-
-### Documents RAG
-
-La transformation d’une offre en document texte est gérée dans :
-
-```txt
-lib/rag/job-offer-rag-document.ts
-```
-
-### Embeddings
-
-La génération d’embeddings est gérée dans :
-
-```txt
-lib/rag/generate-embedding.ts
-```
-
-Le projet utilise le provider OpenAI explicite via :
-
-```ts
-openai.embeddingModel("text-embedding-3-small")
-```
-
-### pgvector
-
-Le projet utilise une image PostgreSQL compatible pgvector :
-
-```yaml
-image: pgvector/pgvector:pg17-trixie
-```
-
-L’extension doit être activée en base :
-
-```sql
-CREATE EXTENSION IF NOT EXISTS vector;
-```
-
-Le modèle Prisma utilise un champ vectoriel défini avec :
-
-```prisma
-embedding Unsupported("vector(1536)")
-```
-
-Le nombre `1536` correspond au nombre de dimensions du modèle `text-embedding-3-small`.
-
-### Modèle d’embedding
-
-Le modèle Prisma ajouté est :
-
-```prisma
-model JobOfferEmbedding {
-  id String @id @default(cuid())
-
-  jobOfferId String   @unique
-  jobOffer   JobOffer @relation(fields: [jobOfferId], references: [id], onDelete: Cascade)
-
-  content String
-  embedding Unsupported("vector(1536)")
-
-  modelName String @default("text-embedding-3-small")
-
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
-
-  @@index([jobOfferId])
-}
-```
-
-Chaque offre peut avoir un embedding associé.
-
-### Recherche vectorielle
-
-La recherche vectorielle est implémentée dans :
-
-```txt
-lib/rag/search-job-offers.ts
-```
-
-Elle fonctionne ainsi :
-
-```txt
-question utilisateur
-→ embedding de la question
-→ comparaison avec les embeddings stockés
-→ récupération des offres les plus proches
-```
-
-La comparaison utilise l’opérateur pgvector :
-
-```sql
-<=>
-```
-
-Plus la distance est faible, plus le document est proche sémantiquement de la question.
-
-### Réponse RAG
-
-La génération de réponse est implémentée dans :
-
-```txt
-lib/rag/answer-question-about-offers.ts
-```
-
-Le system prompt impose plusieurs règles :
-
-- répondre uniquement à partir des sources fournies ;
-- ne pas inventer d’offres, d’entreprises, de salaires ou de conditions ;
-- dire quand les sources ne permettent pas de répondre clairement ;
-- répondre en français ;
-- citer les sources utilisées avec un format du type `[Source 1]`.
-
-### Page disponible
-
-La page RAG est disponible ici :
-
-```txt
-/rag
-```
-
-Elle permet de poser une question en langage naturel sur les offres indexées.
-
-Elle affiche aussi :
-
-- le nombre total d’offres ;
-- le nombre d’offres indexées pour le RAG ;
-- le nombre d’embeddings manquants ;
-- la réponse générée ;
-- les sources utilisées ;
-- la distance vectorielle de chaque source ;
-- un lien vers la page détail de chaque offre source.
-
-### Scripts RAG utiles
-
-Vérifier l’état de l’index RAG :
-
-```bash
-npm run rag:check-embeddings
-```
-
-Générer les embeddings manquants :
-
-```bash
-npm run rag:generate-missing-embeddings
-```
-
-Tester la recherche vectorielle seule :
-
-```bash
-npm run rag:search
-```
-
-Tester la réponse RAG complète :
-
-```bash
-npm run rag:answer
-```
-
-### Garde-fous RAG
-
-Le RAG ne remplace pas la base de données.
-
-Le modèle ne connaît pas directement les offres. L’application récupère d’abord les sources pertinentes, puis les transmet au LLM.
-
-Le système demande au modèle de :
-
-- répondre uniquement à partir des sources fournies ;
-- ne pas inventer d’offre, de salaire ou de condition ;
-- citer les sources utilisées ;
-- dire quand les sources ne suffisent pas.
-
----
-
-## Module 9 — Agent avec tools contrôlés
-
-Le neuvième module ajoute un premier agent IA contrôlé capable d’utiliser des fonctions de l’application comme tools.
-
-L’objectif n’est pas de créer un agent autonome libre. L’objectif est de comprendre le tool calling et de construire un assistant limité, traçable et sécurisé.
-
-Le flux général est :
-
-```txt
-question utilisateur
-→ LLM
-→ choix éventuel d’un tool
-→ exécution du tool côté serveur
-→ retour du résultat au LLM
-→ réponse finale
-→ affichage des tools utilisés
-```
-
-### Différence entre RAG et agent
-
-Le RAG cherche toujours des sources avant de répondre :
-
-```txt
-question
-→ recherche vectorielle
-→ sources
-→ LLM
-→ réponse
-```
-
-L’agent, lui, peut décider d’utiliser un tool selon la demande :
-
-```txt
-question
-→ LLM
-→ tool si nécessaire
-→ résultat du tool
-→ LLM
-→ réponse
-```
-
-Dans le projet, le RAG sert à répondre à partir des documents d’offres indexés. L’agent sert à orchestrer des capacités applicatives contrôlées, comme rechercher des offres ou consulter le détail d’une offre.
-
-### Tools disponibles
-
-Le module introduit deux tools de lecture :
-
-```txt
-searchOffers
-getOfferDetails
-```
-
-#### `searchOffers`
-
-Ce tool recherche des offres dans la base de données à partir d’une requête texte.
-
-Il s’appuie sur :
-
-```txt
-lib/agent/search-offers-for-agent.ts
-```
-
-Il retourne une liste courte d’offres avec notamment :
-
-- identifiant ;
-- titre ;
-- entreprise ;
-- localisation ;
-- contrat ;
-- remote ;
-- compétences ;
-- analyse IA synthétique si disponible.
-
-Le tool ne modifie aucune donnée.
-
-#### `getOfferDetails`
-
-Ce tool récupère le détail d’une offre à partir de son identifiant.
-
-Il s’appuie sur :
-
-```txt
-lib/agent/get-offer-details-for-agent.ts
-```
-
-Il retourne notamment :
-
-- informations principales ;
-- description complète ;
-- URL source ;
-- analyse IA si disponible ;
-- signaux positifs ;
-- points de vigilance.
-
-Le tool ne modifie aucune donnée.
-
-### Déclaration des tools
-
-Les tools sont déclarés dans :
-
-```txt
-lib/agent/job-agent-tools.ts
-```
-
-Chaque tool contient :
-
-- une description lisible par le modèle ;
-- un schéma d’input validé avec Zod ;
-- une fonction `execute` côté serveur.
-
-Exemple conceptuel :
-
-```txt
-LLM
-→ appelle searchOffers avec { query: "React junior" }
-→ le tool valide l’input
-→ Prisma interroge PostgreSQL
-→ le résultat revient au LLM
-```
-
-### Orchestration agentique
-
-La logique principale est centralisée dans :
-
-```txt
-lib/agent/run-job-agent.ts
-```
-
-Cette fonction :
-
-- reçoit une question utilisateur ;
-- appelle le modèle avec les tools disponibles ;
-- limite le nombre d’étapes ;
-- retourne la réponse finale ;
-- retourne les tools utilisés ;
-- retourne l’usage tokens.
-
-La fonction retourne un objet du type :
-
-```txt
-answer
-toolCalls
-usage
-```
-
-Cela permet de réutiliser la même logique depuis un script ou depuis l’interface Next.js.
-
-### Trace des tools utilisés
-
-Les étapes brutes retournées par le SDK sont très verbeuses.
-
-Le projet les transforme en résumé lisible avec :
-
-```txt
-lib/agent/summarize-agent-tool-calls.ts
-```
-
-Exemple d’affichage :
-
-```txt
-Tools utilisés :
-- searchOffers
-  input: { query: "React junior" }
-  résultat: 5 résultat(s)
-
-- getOfferDetails
-  input: { offerId: "..." }
-  résultat: offre trouvée : Développeur Frontend React Junior chez Atelier Nova
-```
-
-Cette trace est importante pour éviter l’effet boîte noire.
-
-### Interface agent
-
-La page agent est disponible ici :
-
-```txt
-/agent
-```
-
-Fichiers principaux :
-
-```txt
-app/agent/page.tsx
-app/agent/actions.ts
-app/agent/AgentQuestionForm.tsx
-```
-
-La page permet de :
-
-- poser une question à l’agent ;
-- afficher la réponse ;
-- afficher les tools utilisés ;
-- afficher les tokens consommés ;
-- rappeler les garde-fous actuels.
-
-### Scripts de test agent
-
-Tester la recherche agent sans LLM :
-
-```bash
-npm run agent:test:search
-```
-
-Tester la récupération du détail d’une offre sans LLM :
-
-```bash
-npm run agent:test:details
-```
-
-Tester l’agent complet avec tool calling :
-
-```bash
-npm run agent:test
-```
-
-### Garde-fous agent
-
-Le module 9 respecte les contraintes suivantes :
-
-- tools de lecture uniquement ;
-- aucun envoi de mail ;
-- aucune candidature automatique ;
-- aucune suppression ou modification de données ;
-- aucun scraping lancé par l’agent ;
-- inputs de tools validés avec Zod ;
-- nombre d’étapes limité ;
-- tools utilisés affichés à l’utilisateur ;
-- fake mode IA possible avec `USE_FAKE_AI`.
-
-### Limites du module agent actuel
-
-L’agent reste volontairement simple :
-
-- pas de mémoire conversationnelle ;
-- pas de chat multi-message ;
-- pas de streaming ;
-- pas de brouillon de candidature ;
-- pas d’action sensible ;
-- pas de confirmation humaine encore nécessaire, car aucun tool sensible n’est disponible ;
-- pas de refactor final des types agent pour l’instant.
-
-Ces limites sont volontaires. Le but du module est de comprendre le tool calling et de construire une base contrôlée.
-
----
-
-## Modèles Prisma actuels
-
-Le projet contient notamment :
-
-- `JobOffer`
-- `ScrapingRun`
-- `JobAnalysis`
-- `JobOfferEmbedding`
-
-### JobOffer
-
-Représente une offre d’emploi stockée en base.
-
-Champs importants :
-
-- `title`
-- `company`
-- `location`
-- `contractType`
-- `remote`
-- `skills`
-- `description`
-- `source`
-- `url`
-- `scrapedAt`
-- `qualityScore`
-- `qualityIssues`
-- `createdAt`
-- `updatedAt`
-
-Le champ `url` est unique.
-
-Relations principales :
-
-- une offre peut avoir une analyse IA ;
-- une offre peut avoir un embedding RAG ;
-- une offre peut être liée à une session de scraping.
-
-### ScrapingRun
-
-Représente une session de scraping ou d’import.
-
-Champs importants :
-
-- `source`
-- `status`
-- `offersCount`
-- `startedAt`
-- `finishedAt`
-- `errorMessage`
-
-Cela permet de tracer les imports.
-
-### JobAnalysis
-
-Représente une analyse IA associée à une offre.
-
-Champs importants :
-
-- `jobOfferId`
-- `summary`
-- `requiredSkills`
-- `niceToHaveSkills`
-- `experienceLevel`
-- `remotePolicy`
-- `salaryMentioned`
-- `redFlags`
-- `positiveSignals`
-- `analysisMode`
-- `modelName`
-- `inputTokens`
-- `outputTokens`
-- `totalTokens`
-- `createdAt`
-- `updatedAt`
-
-Pour l’instant :
-
-```txt
-une offre = une analyse IA maximum
-```
-
-### JobOfferEmbedding
-
-Représente le document RAG et l’embedding associés à une offre.
-
-Champs importants :
-
-- `jobOfferId`
-- `content`
-- `embedding`
-- `modelName`
-- `createdAt`
-- `updatedAt`
-
-Pour l’instant :
-
-```txt
-une offre = un embedding maximum
 ```
 
 ---
@@ -1320,9 +286,7 @@ une offre = un embedding maximum
 /offers
 ```
 
-Affiche les offres stockées en base PostgreSQL.
-
-Les offres sont enrichies avec un score de compatibilité et triées par pertinence.
+Affiche les offres stockées en base PostgreSQL. Les offres sont enrichies avec un score de compatibilité et triées par pertinence.
 
 ### Détail d’une offre
 
@@ -1359,15 +323,7 @@ Affiche le profil utilisé pour calculer le score des offres.
 /rag
 ```
 
-Permet de poser une question en langage naturel sur les offres indexées.
-
-Affiche :
-
-- les statistiques de l’index RAG ;
-- la réponse générée ;
-- les sources utilisées ;
-- les distances vectorielles ;
-- les liens vers les offres sources.
+Permet de poser une question en langage naturel sur les offres indexées. La page affiche les statistiques de l’index, la réponse générée, les sources utilisées, les distances vectorielles et les liens vers les offres sources.
 
 ### Agent contrôlé
 
@@ -1376,15 +332,6 @@ Affiche :
 ```
 
 Permet de poser une question à un agent IA contrôlé.
-
-Affiche :
-
-- la réponse de l’agent ;
-- les tools utilisés ;
-- les inputs des tools ;
-- un résumé du résultat des tools ;
-- les tokens consommés ;
-- les garde-fous actuels.
 
 L’agent peut actuellement :
 
@@ -1431,7 +378,7 @@ npm install
 
 Copier `.env.example` vers `.env.local`.
 
-Exemple :
+Exemple local :
 
 ```env
 DATABASE_URL="postgresql://jobradar:jobradar_password@localhost:5432/jobradar"
@@ -1447,7 +394,7 @@ Ne jamais committer :
 .env.local
 ```
 
-Le dépôt doit seulement contenir :
+Le dépôt doit seulement contenir un exemple sans vraie clé :
 
 ```txt
 .env.example
@@ -1590,49 +537,57 @@ npm run dev
 
 ## Scripts disponibles
 
-### Lancer le serveur Next.js
+### Application
 
 ```bash
 npm run dev
+npm run build
+npm run start
+npm run lint
 ```
 
-### Lancer le build
+### Qualité et tests
 
 ```bash
-npm run build
+npm run test
+npm run test:watch
+npm run check
 ```
 
-### Scraping statique
+`npm run check` lance :
+
+```txt
+tests unitaires
+→ lint
+→ build Next.js
+```
+
+Les tests actuels ciblent volontairement des fonctions pures : nettoyage, normalisation, déduplication, qualité des offres et estimation de coût IA. Les appels Prisma, OpenAI, RAG complet et agent complet ne sont pas encore couverts par des tests automatisés.
+
+### Scraping
 
 ```bash
 npm run scrape:static
-```
-
-Génère :
-
-```txt
-data/scraped-jobs.json
-```
-
-### Scraping dynamique
-
-```bash
 npm run scrape:dynamic
 ```
 
-Génère :
+Ces scripts génèrent :
 
 ```txt
+data/scraped-jobs.json
 data/dynamic-scraped-jobs.json
 ```
 
-### Importer les offres JSON en base
+### Base de données
 
 ```bash
 npm run db:import:scraped
+npm run db:studio
+npm run db:migrate
+npm run db:generate
 ```
 
-Ce script :
+Le script `db:import:scraped` :
 
 - lit les fichiers JSON ;
 - nettoie les offres ;
@@ -1642,13 +597,7 @@ Ce script :
 - insère ou met à jour les offres avec `upsert` ;
 - stocke `qualityScore` et `qualityIssues`.
 
-### Ouvrir Prisma Studio
-
-```bash
-npm run db:studio
-```
-
-### Scripts de test IA
+### IA structurée
 
 ```bash
 npm run ai:test
@@ -1657,7 +606,7 @@ npm run ai:test:save
 
 Ces scripts servent à tester l’analyse IA hors interface.
 
-### Script de test scoring
+### Scoring
 
 ```bash
 npm run score:test
@@ -1665,55 +614,31 @@ npm run score:test
 
 Ce script sert à tester le scoring hors interface.
 
-### Scripts RAG
-
-Vérifier l’état de l’index RAG :
+### RAG
 
 ```bash
 npm run rag:check-embeddings
-```
-
-Générer les embeddings manquants :
-
-```bash
 npm run rag:generate-missing-embeddings
-```
-
-Générer un nombre limité d’embeddings manquants :
-
-```bash
 npm run rag:generate-missing-embeddings -- --limit=2
-```
-
-Tester la recherche vectorielle :
-
-```bash
 npm run rag:search
-```
-
-Tester la réponse RAG complète :
-
-```bash
 npm run rag:answer
 ```
 
-### Scripts agent
+Scripts RAG pédagogiques / développement :
 
-Tester la recherche agent sans LLM :
+```bash
+npm run dev:rag:test-document
+npm run dev:rag:test-db-documents
+npm run dev:rag:test-embedding
+npm run dev:rag:create-one-embedding
+npm run dev:rag:generate-some-embeddings
+```
+
+### Agent
 
 ```bash
 npm run agent:test:search
-```
-
-Tester la récupération du détail d’une offre sans LLM :
-
-```bash
 npm run agent:test:details
-```
-
-Tester l’agent complet avec tool calling :
-
-```bash
 npm run agent:test
 ```
 
@@ -1762,9 +687,47 @@ http://localhost:3000/rag
 
 ---
 
-## Tester l’analyse IA
+## Analyse IA structurée
 
-### En fake mode
+Le module d’analyse IA transforme une description d’offre en objet structuré validé avec Zod.
+
+Flux :
+
+```txt
+description d’offre
+→ LLM
+→ objet structuré
+→ validation Zod
+→ stockage PostgreSQL
+→ affichage dans /offers/[id]
+```
+
+L’analyse IA est déclenchée manuellement depuis la page détail d’une offre. Elle n’est pas lancée automatiquement sur toutes les offres.
+
+### Données extraites
+
+Une analyse contient notamment :
+
+- `summary`
+- `requiredSkills`
+- `niceToHaveSkills`
+- `experienceLevel`
+- `remotePolicy`
+- `salaryMentioned`
+- `redFlags`
+- `positiveSignals`
+
+Exemples :
+
+```txt
+experienceLevel:
+internship | junior | mid | senior | unknown
+
+remotePolicy:
+on_site | hybrid | full_remote | unknown
+```
+
+### Fake mode IA
 
 Dans `.env.local` :
 
@@ -1772,25 +735,14 @@ Dans `.env.local` :
 USE_FAKE_AI=true
 ```
 
-Puis :
+En fake mode :
 
-```bash
-npm run dev
-```
+- pas d’appel OpenAI ;
+- pas de consommation de tokens ;
+- analyse simulée ;
+- pipeline testable localement.
 
-Sur une page détail :
-
-```txt
-/offers/[id]
-```
-
-Cliquer sur :
-
-```txt
-Analyser avec IA fake
-```
-
-### En mode réel
+### Mode réel
 
 Dans `.env.local` :
 
@@ -1798,152 +750,299 @@ Dans `.env.local` :
 USE_FAKE_AI=false
 ```
 
-Redémarrer le serveur :
-
-```bash
-Ctrl + C
-npm run dev
-```
-
-Puis relancer l’analyse sur une seule offre.
-
-Repasser ensuite en fake mode pour éviter les appels involontaires :
+L’application appelle OpenAI via le Vercel AI SDK. La clé API doit rester uniquement côté serveur :
 
 ```env
-USE_FAKE_AI=true
+OPENAI_API_KEY="your_api_key_here"
 ```
 
 ---
 
-## Tester le RAG
+## Scoring par rapport au profil candidat
 
-Le RAG nécessite des embeddings stockés en base.
+Le scoring compare chaque offre à un profil candidat statique.
 
-### 1. Vérifier l’état de l’index
-
-```bash
-npm run rag:check-embeddings
-```
-
-### 2. Générer les embeddings manquants
-
-```bash
-npm run rag:generate-missing-embeddings
-```
-
-Ou avec une limite :
-
-```bash
-npm run rag:generate-missing-embeddings -- --limit=2
-```
-
-### 3. Tester la recherche vectorielle seule
-
-```bash
-npm run rag:search
-```
-
-### 4. Tester la réponse RAG complète
-
-```bash
-npm run rag:answer
-```
-
-### 5. Tester dans l’interface
-
-Lancer l’application :
-
-```bash
-npm run dev
-```
-
-Puis ouvrir :
+Le profil est défini dans :
 
 ```txt
-http://localhost:3000/rag
+lib/profile/candidate-profile.ts
 ```
 
-Exemple de question :
+Le scoring est implémenté dans :
 
 ```txt
-Quelles offres sont adaptées à un développeur React junior qui veut du télétravail ?
+lib/scoring/score-job-offer.ts
 ```
+
+Le LLM ne décide pas directement si une offre est bonne ou mauvaise. Il extrait des informations structurées. Le code TypeScript applique ensuite des règles métier explicites.
+
+Critères pris en compte :
+
+- compétences demandées ;
+- niveau estimé du poste ;
+- politique remote ;
+- points de vigilance IA ;
+- signaux positifs IA ;
+- type de contrat ;
+- localisation ;
+- présence d’un salaire ;
+- qualité des données scrapées ;
+- présence ou absence d’une analyse IA.
+
+Cela rend le score plus lisible, plus testable et plus facile à modifier.
 
 ---
 
-## Tester l’agent
+## RAG sur les offres
 
-L’agent utilise des tools contrôlés côté serveur.
+Le RAG permet de poser des questions en langage naturel sur les offres stockées.
 
-### 1. Tester les fonctions métier sans LLM
-
-Tester la recherche :
-
-```bash
-npm run agent:test:search
-```
-
-Tester la lecture détaillée d’une offre :
-
-```bash
-npm run agent:test:details
-```
-
-### 2. Tester l’agent complet en script
-
-En mode réel :
-
-```env
-USE_FAKE_AI=false
-```
-
-Puis :
-
-```bash
-npm run agent:test
-```
-
-Le script affiche :
-
-- la réponse de l’agent ;
-- les tools utilisés ;
-- les inputs des tools ;
-- un résumé du résultat des tools ;
-- les tokens consommés.
-
-### 3. Tester dans l’interface
-
-Lancer l’application :
-
-```bash
-npm run dev
-```
-
-Puis ouvrir :
+Flux :
 
 ```txt
-http://localhost:3000/agent
+question utilisateur
+→ embedding de la question
+→ recherche vectorielle avec pgvector
+→ récupération des offres pertinentes
+→ réponse LLM à partir des sources
 ```
 
-Exemples de questions :
+Le modèle ne connaît pas directement la base de données. L’application récupère d’abord les sources pertinentes, puis les transmet au LLM.
+
+### Documents RAG
+
+La transformation d’une offre en document texte est gérée dans :
 
 ```txt
-Trouve-moi une offre React junior et détaille la première.
+lib/rag/job-offer-rag-document.ts
 ```
+
+### Embeddings
+
+La génération d’embeddings est gérée dans :
 
 ```txt
-Trouve-moi une offre TypeScript débutant.
+lib/rag/generate-embedding.ts
 ```
+
+Modèle utilisé :
 
 ```txt
-Est-ce que tu peux envoyer une candidature à Atelier Nova ?
+text-embedding-3-small
 ```
 
-Sur une action sensible comme l’envoi d’une candidature, l’agent ne doit pas agir. Aucun tool sensible n’est disponible.
+Le modèle produit des vecteurs de 1536 dimensions.
 
-### 4. Fake mode IA
+### pgvector
 
-Si `USE_FAKE_AI=true`, l’agent réel n’est pas appelé. Cela évite les appels OpenAI accidentels pendant le développement.
+Le modèle Prisma utilise un champ vectoriel défini avec :
+
+```prisma
+embedding Unsupported("vector(1536)")
+```
+
+Les insertions et recherches vectorielles passent par du SQL brut Prisma.
+
+### Recherche vectorielle
+
+La recherche vectorielle est implémentée dans :
+
+```txt
+lib/rag/search-job-offers.ts
+```
+
+Elle utilise l’opérateur pgvector :
+
+```sql
+<=>
+```
+
+Plus la distance est faible, plus le document est proche sémantiquement de la question.
+
+### Réponse RAG
+
+La génération de réponse est implémentée dans :
+
+```txt
+lib/rag/answer-question-about-offers.ts
+```
+
+Le system prompt impose plusieurs règles :
+
+- répondre uniquement à partir des sources fournies ;
+- ne pas inventer d’offres, d’entreprises, de salaires ou de conditions ;
+- dire quand les sources ne permettent pas de répondre clairement ;
+- répondre en français ;
+- citer les sources utilisées avec un format du type `[Source 1]`.
+
+---
+
+## Agent avec tools contrôlés
+
+Le module agent ajoute un assistant capable d’utiliser certaines fonctions de l’application comme tools.
+
+L’objectif n’est pas de créer un agent autonome libre. L’objectif est de comprendre le tool calling et de construire un assistant limité, traçable et sécurisé.
+
+Flux :
+
+```txt
+question utilisateur
+→ LLM
+→ choix éventuel d’un tool
+→ exécution du tool côté serveur
+→ retour du résultat au LLM
+→ réponse finale
+→ affichage des tools utilisés
+```
+
+### Différence entre RAG et agent
+
+Le RAG cherche toujours des sources avant de répondre :
+
+```txt
+question
+→ recherche vectorielle
+→ sources
+→ LLM
+→ réponse
+```
+
+L’agent peut décider d’utiliser un tool selon la demande :
+
+```txt
+question
+→ LLM
+→ tool si nécessaire
+→ résultat du tool
+→ LLM
+→ réponse
+```
+
+### Tools disponibles
+
+```txt
+searchOffers
+getOfferDetails
+```
+
+`searchOffers` recherche des offres dans la base.
+
+`getOfferDetails` récupère le détail d’une offre à partir de son identifiant.
+
+Les deux tools sont en lecture seule.
+
+### Garde-fous agent
+
+- tools de lecture uniquement ;
+- aucun envoi de mail ;
+- aucune candidature automatique ;
+- aucune suppression ou modification de données ;
+- aucun scraping lancé par l’agent ;
+- inputs de tools validés avec Zod ;
+- nombre d’étapes limité ;
+- tools utilisés affichés à l’utilisateur ;
+- fake mode IA possible avec `USE_FAKE_AI`.
+
+---
+
+## Modèles Prisma actuels
+
+Le projet contient notamment :
+
+- `JobOffer`
+- `ScrapingRun`
+- `JobAnalysis`
+- `JobOfferEmbedding`
+
+### JobOffer
+
+Représente une offre d’emploi stockée en base.
+
+Champs importants :
+
+- `title`
+- `company`
+- `location`
+- `contractType`
+- `remote`
+- `skills`
+- `description`
+- `source`
+- `url`
+- `scrapedAt`
+- `qualityScore`
+- `qualityIssues`
+- `createdAt`
+- `updatedAt`
+
+Le champ `url` est unique.
+
+Relations principales :
+
+- une offre peut avoir une analyse IA ;
+- une offre peut avoir un embedding RAG ;
+- une offre peut être liée à une session de scraping.
+
+### ScrapingRun
+
+Représente une session de scraping ou d’import.
+
+Champs importants :
+
+- `source`
+- `status`
+- `offersCount`
+- `startedAt`
+- `finishedAt`
+- `errorMessage`
+
+### JobAnalysis
+
+Représente une analyse IA associée à une offre.
+
+Champs importants :
+
+- `jobOfferId`
+- `summary`
+- `requiredSkills`
+- `niceToHaveSkills`
+- `experienceLevel`
+- `remotePolicy`
+- `salaryMentioned`
+- `redFlags`
+- `positiveSignals`
+- `analysisMode`
+- `modelName`
+- `inputTokens`
+- `outputTokens`
+- `totalTokens`
+- `createdAt`
+- `updatedAt`
+
+Pour l’instant :
+
+```txt
+une offre = une analyse IA maximum
+```
+
+### JobOfferEmbedding
+
+Représente le document RAG et l’embedding associés à une offre.
+
+Champs importants :
+
+- `jobOfferId`
+- `content`
+- `embedding`
+- `modelName`
+- `createdAt`
+- `updatedAt`
+
+Pour l’instant :
+
+```txt
+une offre = un embedding maximum
+```
 
 ---
 
@@ -2041,16 +1140,9 @@ Les actions coûteuses ou sensibles, comme l’analyse IA, la réponse RAG ou l�
 
 ### Cheerio avant Playwright
 
-Cheerio a été utilisé d’abord parce qu’il est plus simple pour comprendre :
+Cheerio a été utilisé d’abord parce qu’il est plus simple pour comprendre le HTML, le DOM, les sélecteurs CSS et l’extraction de texte.
 
-- le HTML ;
-- le DOM ;
-- les sélecteurs CSS ;
-- l’extraction de texte.
-
-### Playwright ensuite
-
-Playwright a été ajouté pour gérer les pages dynamiques qui chargent leur contenu avec JavaScript.
+Playwright a ensuite été ajouté pour gérer les pages dynamiques qui chargent leur contenu avec JavaScript.
 
 ### PostgreSQL + Prisma
 
@@ -2070,38 +1162,9 @@ pgvector permet de stocker et comparer des embeddings directement dans PostgreSQ
 
 Cela évite d’ajouter une base vectorielle séparée au début du projet.
 
-Le flux actuel est :
-
-```txt
-texte d’offre
-→ embedding OpenAI
-→ stockage PostgreSQL pgvector
-→ recherche par similarité
-```
-
 ### Zod pour les structured outputs et les tools
 
 Zod permet de définir un schéma de sortie attendu pour l’analyse IA et un schéma d’entrée attendu pour les tools agent.
-
-Pour l’analyse IA :
-
-```txt
-LLM
-→ objet structuré
-→ validation Zod
-→ stockage PostgreSQL
-→ affichage UI
-```
-
-Pour les tools agent :
-
-```txt
-LLM
-→ appel tool avec input
-→ validation Zod
-→ exécution côté serveur
-→ retour du résultat
-```
 
 ### Mode fake IA
 
@@ -2120,49 +1183,17 @@ Le scoring n’est pas confié entièrement au LLM.
 
 Le LLM extrait des données structurées, puis le code TypeScript applique des règles métier explicites. Cela rend le score plus lisible, plus testable et plus facile à modifier.
 
-### RAG avec sources
+### Tests unitaires sur fonctions pures
 
-Le RAG est conçu pour répondre à partir de sources récupérées.
+Les premiers tests automatisés ciblent les fonctions déterministes du pipeline :
 
-Le modèle ne connaît pas directement la base de données.
+- nettoyage de texte et d’URL ;
+- normalisation des contrats, skills et remote ;
+- déduplication ;
+- analyse qualité ;
+- estimation du coût IA.
 
-Le fonctionnement est :
-
-```txt
-question utilisateur
-→ recherche vectorielle
-→ sources pertinentes
-→ prompt avec contexte
-→ réponse avec citations
-```
-
-### Agent avec tools contrôlés
-
-L’agent du module 9 n’est pas autonome.
-
-Il reçoit une question, peut appeler seulement les tools déclarés, puis rédige une réponse à partir des résultats.
-
-Les tools actuels sont :
-
-```txt
-searchOffers
-getOfferDetails
-```
-
-Ils sont volontairement limités à la lecture.
-
-Le flux est :
-
-```txt
-question utilisateur
-→ LLM
-→ tool de lecture si nécessaire
-→ résultat du tool
-→ réponse finale
-→ trace des tools utilisés
-```
-
-Cette approche permet d’apprendre le tool calling tout en gardant un cadre sécurisé et explicable.
+Les parties qui dépendent de services externes ou de la base de données restent testées via des scripts manuels pour l’instant.
 
 ---
 
@@ -2181,25 +1212,14 @@ feature/...
 → branches de travail par module
 ```
 
-Exemples :
-
-```txt
-feature/module-4-postgresql-prisma
-feature/module-5-data-cleaning
-feature/module-6-llm-structured-extraction
-feature/module-7-profile-scoring
-feature/module-8-rag
-feature/module-9-agent-tools
-```
-
 Workflow :
 
-1. partir de `develop`
-2. créer une branche `feature`
-3. travailler dessus
-4. commit régulièrement
-5. merger dans `develop` quand le module est stable
-6. merger `develop` dans `main` quand la version est montrable
+1. partir de `develop` ;
+2. créer une branche `feature` ;
+3. travailler dessus ;
+4. commit régulièrement ;
+5. merger dans `develop` quand le module est stable ;
+6. merger `develop` dans `main` quand la version est montrable.
 
 Commandes Git utiles :
 
@@ -2208,21 +1228,10 @@ git status
 git log --oneline --decorate -5
 ```
 
-Créer une branche de module :
+Avant de merger une version montrable :
 
 ```bash
-git checkout develop
-git pull origin develop
-git checkout -b feature/nom-du-module
-git push -u origin feature/nom-du-module
-```
-
-Commit recommandé pour le Module 9 :
-
-```bash
-git add .
-git commit -m "feat(agent): add controlled job agent tools"
-git push
+npm run check
 ```
 
 ---
@@ -2283,31 +1292,40 @@ Statut : terminé.
 
 Objectif : créer un agent capable d’utiliser des tools limités et validés.
 
+### Passe qualité — Refactor ciblé et tests
+
+Statut : terminé.
+
+Objectif : nettoyer certains fichiers, centraliser les types RAG, corriger lint/build, installer Vitest et ajouter les premiers tests unitaires.
+
 ### Module 10 — Qualité, sécurité, README et portfolio
 
-Statut : à venir.
+Statut : en cours / à poursuivre.
 
-Objectif : rendre le projet présentable en entretien.
+Objectif : rendre le projet plus présentable, documenté et défendable en entretien.
 
 ---
 
-## Prochaines étapes techniques
+## Prochaines étapes possibles
 
-Après le Module 9, la suite logique est le Module 10 : qualité, sécurité, README et portfolio.
+Priorités raisonnables pour la suite :
 
-Priorités à venir :
+1. préparer une courte démo du projet ;
+2. ajouter quelques captures d’écran ;
+3. préparer un schéma d’architecture ;
+4. améliorer l’UI des pages principales ;
+5. tester le scoring avec quelques cas métier supplémentaires ;
+6. ajouter une génération de brouillon de candidature sans envoi automatique ;
+7. préparer un déploiement ;
+8. réfléchir à des sources de données réelles mais autorisées.
 
-1. vérifier le build complet ;
-2. relire les garde-fous de sécurité ;
-3. vérifier que les clés API ne sont jamais exposées côté client ;
-4. nettoyer ou ranger les scripts pédagogiques ;
-5. faire le refactor des types agent si nécessaire ;
-6. préparer des captures d’écran ;
-7. préparer un schéma d’architecture ;
-8. documenter les limites du projet ;
-9. préparer une explication courte pour entretien.
+À éviter pour l’instant :
 
-Le brouillon de candidature et les actions sensibles restent volontairement hors du Module 9.
+- agent autonome libre ;
+- envoi automatique de candidatures ;
+- scraping agressif de sites sensibles ;
+- refactor massif sans objectif clair ;
+- ajout de features IA sans garde-fous.
 
 ---
 
@@ -2340,6 +1358,7 @@ Ce projet permet d’expliquer :
 - comment un LLM peut appeler une fonction applicative ;
 - pourquoi limiter les tools disponibles ;
 - comment tracer les tools utilisés ;
+- comment ajouter progressivement des tests unitaires ;
 - quelles limites juridiques et techniques existent autour du scraping ;
 - comment préparer progressivement une application IA sérieuse.
 
@@ -2363,6 +1382,8 @@ Limites connues :
 - l’agent actuel est limité à des tools de lecture ;
 - l’agent n’a pas encore de mémoire conversationnelle ;
 - l’agent ne génère pas encore de brouillon de candidature ;
+- les tests automatisés couvrent surtout les fonctions pures ;
+- les flows Prisma, OpenAI, RAG complet et agent complet sont encore testés surtout par scripts ;
 - il n’y a pas encore de gestion utilisateur ;
 - il n’y a pas encore de déploiement production finalisé.
 
