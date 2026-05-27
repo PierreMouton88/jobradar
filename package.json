@@ -9,6 +9,7 @@
     "lint": "eslint",
     "test": "vitest run",
     "test:watch": "vitest",
+    "check": "npm run test && npm run lint && npm run build",
     "scrape:static": "tsx lib/scraping/export-static-jobs.ts",
     "scrape:dynamic": "tsx lib/scraping/export-dynamic-jobs.ts",
     "db:import:scraped": "tsx scripts/import-scraped-jobs.ts",
