@@ -26,6 +26,7 @@
     "agent:test:search": "tsx scripts/test-agent-search-offers.ts",
     "agent:test:details": "tsx scripts/test-agent-get-offer-details.ts",
     "agent:test": "tsx scripts/test-job-agent.ts",
+    "external:preview": "tsx scripts/preview-external-import.ts",
     "dev:rag:test-document": "tsx scripts/test-rag-document.ts",
     "dev:rag:test-db-documents": "tsx scripts/test-rag-documents-from-db.ts",
     "dev:rag:test-embedding": "tsx scripts/test-generate-embedding.ts",
