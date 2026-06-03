@@ -43,9 +43,9 @@ export function mapIndeedApifyOffer(
     salaryMax: rawOffer.salary?.salaryMax ?? null,
     salaryCurrency: rawOffer.salary?.salaryCurrency ?? null,
 
-    rawSkills: rawOffer.attributes ?? [],
+    rawSkills: [],
+    sourceTags: rawOffer.attributes ?? [],
     rawExperienceLevel: null,
-
     rawData: rawOffer,
   };
 }

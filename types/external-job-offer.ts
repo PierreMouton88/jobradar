@@ -37,6 +37,7 @@ export type ExternalJobOffer = {
   salaryCurrency?: string | null;
 
   rawSkills?: string[];
+  sourceTags?: string[];
   rawExperienceLevel?: string | null;
 
   rawData: unknown;

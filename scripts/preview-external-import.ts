@@ -1,5 +1,9 @@
 import { JsonFileExternalRawItemsLoader } from "@/lib/sources/json-file-external-raw-items-loader";
 import { mapExternalRawItem } from "@/lib/sources/map-external-raw-item";
+import {
+  prepareExternalOfferForDb,
+  previewExternalJobOffersImport,
+} from "../lib/offers/import-external-job-offers";
 
 type SupportedExternalSource = "indeed" | "linkedin";
 
@@ -49,44 +53,64 @@ async function main() {
 
   const validOffers = mappedOffers.filter((item) => item.ok);
   const invalidOffers = mappedOffers.filter((item) => !item.ok);
+  const externalOffers = validOffers.map((item) => item.offer);
+const importPreviewReport = previewExternalJobOffersImport(externalOffers);
 
-  console.log("Preview import externe");
-  console.log("----------------------");
-  console.log(`Source brute : ${loadResult.metadata.sourceLabel}`);
-  console.log(`Chargé à : ${loadResult.metadata.loadedAt}`);
-  console.log(`Total items : ${rawItems.length}`);
-  console.log(`Valides : ${validOffers.length}`);
-  console.log(`Invalides : ${invalidOffers.length}`);
-  console.log(`Source : ${source}`);
-  console.log(`Actor : ${sourceActor}`);
-  console.log(`Importé à : ${importedAt}`);
+  console.log("\nPreview préparation import V2");
+console.log("-----------------------------");
+console.log(`Total offres externes : ${importPreviewReport.totalOffers}`);
+console.log(`Offres préparées : ${importPreviewReport.preparedOffers.length}`);
+console.log(`Erreurs de préparation : ${importPreviewReport.errors.length}`);
+console.log(`Offres uniques : ${importPreviewReport.uniqueOffers.length}`);
+console.log(`Doublons détectés : ${importPreviewReport.duplicates.length}`);
+console.log("\nAperçu des 5 premières offres préparées :");
 
-  console.log("\nAperçu des 5 premières offres valides :");
+for (const preparedOffer of importPreviewReport.preparedOffers.slice(0, 5)) {
+  console.log({
+    externalId: preparedOffer.externalId,
+    title: preparedOffer.title,
+    company: preparedOffer.company,
+    normalizedSourceUrl: preparedOffer.normalizedSourceUrl,
+    normalizedContractType: preparedOffer.normalizedContractType,
+    detectedRemote: preparedOffer.detectedRemote,
+    detectedSkills: preparedOffer.detectedSkills,
+    sourceTags: preparedOffer.sourceTags,
+  });
+}
+console.log("\nPreview données prêtes pour DB");
+console.log("------------------------------");
 
-  for (const item of validOffers.slice(0, 5)) {
-    console.log({
-      externalId: item.offer.externalId,
-      sourceProvider: item.offer.sourceProvider,
-      sourceName: item.offer.sourceName,
-      sourceActor: item.offer.sourceActor,
-      title: item.offer.title,
-      company: item.offer.company,
-      location: item.offer.location,
-      contractType: item.offer.contractType,
-      sourceUrl: item.offer.sourceUrl,
-    });
+for (const uniqueOffer of importPreviewReport.uniqueOffers.slice(0, 5)) {
+  const dbOffer = prepareExternalOfferForDb(uniqueOffer);
+
+  console.log({
+    title: dbOffer.title,
+    company: dbOffer.company,
+    location: dbOffer.location,
+    contractType: dbOffer.contractType,
+    remote: dbOffer.remote,
+    skills: dbOffer.skills,
+    source: dbOffer.source,
+    url: dbOffer.url,
+    scrapedAt: dbOffer.scrapedAt.toString(),
+    qualityScore: dbOffer.qualityScore,
+    qualityIssues: dbOffer.qualityIssues,
+  });
+}
+if (importPreviewReport.errors.length > 0) {
+  console.log("\nPremières erreurs de préparation :");
+
+  for (const error of importPreviewReport.errors.slice(0, 3)) {
+    console.log(error);
   }
+}
+if (importPreviewReport.duplicates.length > 0) {
+  console.log("\nPremiers doublons détectés :");
 
-  if (invalidOffers.length > 0) {
-    console.log("\nPremières erreurs de validation :");
-
-    for (const item of invalidOffers.slice(0, 3)) {
-      console.log({
-        index: item.index,
-        error: item.error,
-      });
-    }
+  for (const duplicate of importPreviewReport.duplicates.slice(0, 5)) {
+    console.log(duplicate);
   }
+}
 }
 
 main().catch((error) => {

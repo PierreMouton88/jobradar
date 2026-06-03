@@ -59,7 +59,8 @@ describe("mapExternalRawItem", () => {
       salaryMin: 35000,
       salaryMax: 42000,
       salaryCurrency: "EUR",
-      rawSkills: ["React", "Node.js", "TypeScript"],
+      rawSkills: [],
+sourceTags: ["React", "Node.js", "TypeScript"],
     });
   });
 

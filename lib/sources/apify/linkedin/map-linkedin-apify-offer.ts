@@ -40,6 +40,7 @@ export function mapLinkedinApifyOffer(
     salaryCurrency: null,
 
     rawSkills: [],
+    sourceTags: [],
     rawExperienceLevel: rawOffer.seniority_level ?? null,
 
     rawData: rawOffer,
