@@ -1,6 +1,9 @@
 import { prisma } from "@/lib/prisma";
 import type { ExternalJobOffer } from "@/types/external-job-offer";
-import { prepareExternalOfferForDb, previewExternalJobOffersImport } from "../offers/import-external-job-offers";
+import {
+  prepareExternalOfferForDb,
+  previewExternalJobOffersImport,
+} from "../offers/import-external-job-offers";
 
 export type ImportExternalJobOffersToDbOptions = {
   externalOffers: ExternalJobOffer[];
@@ -99,14 +102,21 @@ export async function importExternalJobOffersToDb(
       );
     }
   }
+  const importedOffersCount = report.created + report.updated;
 
+  const finalStatus =
+    report.errors.length === 0
+      ? "SUCCESS"
+      : importedOffersCount > 0
+        ? "PARTIAL"
+        : "FAILED";
   await prisma.scrapingRun.update({
     where: {
       id: scrapingRun.id,
     },
     data: {
-      status: report.errors.length > preview.errors.length ? "PARTIAL" : "SUCCESS",
-      offersCount: report.created + report.updated,
+      status: finalStatus,
+      offersCount: importedOffersCount,
       finishedAt: new Date(),
       errorMessage: report.errors.length > 0 ? report.errors.join("\n") : null,
     },
