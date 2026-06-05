@@ -5,9 +5,9 @@ export default async function RagPage() {
   const stats = await getRagIndexStats();
 
   return (
-    <main className="mx-auto max-w-3xl space-y-6 p-6">
+    <main className="mx-auto max-w-3xl space-y-4 p-4 sm:space-y-6 sm:p-6">
       <div className="space-y-2">
-        <h1 className="text-3xl font-bold">Recherche RAG sur les offres</h1>
+        <h1 className="text-2xl font-bold sm:text-3xl">Recherche RAG sur les offres</h1>
 
         <p className="text-gray-700">
           Pose une question en langage naturel. L’application recherche les

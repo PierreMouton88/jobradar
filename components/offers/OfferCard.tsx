@@ -14,17 +14,17 @@ export function OfferCard({ offer }: OfferCardProps) {
         : "text-red-400";
 
   return (
-    <article className="rounded-xl border border-gray-800 bg-gray-900 p-5 transition-colors hover:border-gray-700">
-      <div className="flex items-start justify-between gap-4">
-        <div>
-          <h2 className="text-lg font-semibold text-white">{offer.title}</h2>
-          <p className="mt-0.5 text-sm text-gray-400">
+    <article className="rounded-xl border border-gray-800 bg-gray-900 p-4 sm:p-5 transition-colors hover:border-gray-700">
+      <div className="flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between sm:gap-4">
+        <div className="min-w-0">
+          <h2 className="text-base font-semibold text-white sm:text-lg">{offer.title}</h2>
+          <p className="mt-0.5 text-sm text-gray-400 truncate">
             {offer.company} — {offer.location}
           </p>
         </div>
         {offer.score && (
-          <div className="shrink-0 text-right">
-            <p className={`text-xl font-bold ${scoreColor}`}>
+          <div className="sm:shrink-0 sm:text-right">
+            <p className={`text-base font-bold sm:text-xl ${scoreColor}`}>
               {offer.score.label} — {offer.score.percentage} %
             </p>
             <p className="text-xs text-gray-500">match</p>

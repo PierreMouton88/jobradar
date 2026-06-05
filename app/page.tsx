@@ -2,13 +2,13 @@ import Link from "next/link";
 
 export default function HomePage() {
   return (
-    <main className="mx-auto max-w-4xl p-6">
-      <section className="rounded-lg border p-6 shadow-sm">
+    <main className="mx-auto max-w-4xl p-4 sm:p-6">
+      <section className="rounded-lg border p-4 shadow-sm sm:p-6">
         <p className="text-sm font-medium text-gray-500">Projet fil rouge</p>
 
-        <h1 className="mt-2 text-4xl font-bold">JobRadar IA</h1>
+        <h1 className="mt-2 text-3xl font-bold sm:text-4xl">JobRadar IA</h1>
 
-        <p className="mt-4 text-lg text-gray-700">
+        <p className="mt-4 text-base text-gray-700 sm:text-lg">
           Une application d’apprentissage pour collecter, structurer, analyser
           et interroger des offres d’emploi avec Next.js, scraping, base de
           données et IA.
@@ -24,7 +24,7 @@ export default function HomePage() {
         </div>
       </section>
 
-      <section className="mt-8 grid gap-4 md:grid-cols-3">
+      <section className="mt-6 grid gap-3 sm:mt-8 sm:gap-4 md:grid-cols-3">
         <div className="rounded-lg border p-4">
           <h2 className="font-semibold">1. Collecter</h2>
           <p className="mt-2 text-sm text-gray-600">

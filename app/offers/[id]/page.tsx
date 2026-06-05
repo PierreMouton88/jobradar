@@ -37,21 +37,22 @@ export default async function OfferDetailPage({
         : "text-red-400";
 
   return (
-    <main className="mx-auto max-w-4xl p-6 space-y-6">
+    <main className="mx-auto max-w-4xl p-4 sm:p-6 space-y-4 sm:space-y-6">
       {/* Header */}
-      <div className="rounded-xl border border-gray-800 bg-gray-900 p-6">
-        <div className="flex items-start justify-between gap-4">
-          <div>
-            <h1 className="text-2xl font-bold text-white">{offer.title}</h1>
+      <div className="rounded-xl border border-gray-800 bg-gray-900 p-4 sm:p-6">
+        <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between sm:gap-4">
+          <div className="min-w-0">
+            <h1 className="text-xl font-bold text-white sm:text-2xl">{offer.title}</h1>
             <p className="mt-1 text-gray-400">
               {offer.company} — {offer.location}
             </p>
           </div>
           {offer.score && (
-            <div className="shrink-0 text-right">
-              <p className={`text-3xl font-bold ${scoreColor}`}>
-                {offer.score.label} — {offer.score.percentage} % de compatibilité
+            <div className="sm:shrink-0 sm:text-right">
+              <p className={`text-xl font-bold sm:text-2xl ${scoreColor}`}>
+                {offer.score.label} — {offer.score.percentage} %
               </p>
+              <p className="text-xs text-gray-500">de compatibilité</p>
             </div>
           )}
         </div>
@@ -83,7 +84,7 @@ export default async function OfferDetailPage({
 
       {/* Score détaillé */}
       {offer.score && (
-        <div className="rounded-xl border border-gray-800 bg-gray-900 p-6">
+        <div className="rounded-xl border border-gray-800 bg-gray-900 p-4 sm:p-6">
           <h2 className="text-lg font-semibold text-white">Score profil</h2>
           <p className="mt-1 text-sm text-gray-400">
             {offer.score.score}/{offer.score.maxScore} points
@@ -138,7 +139,7 @@ export default async function OfferDetailPage({
       )}
 
       {/* Description */}
-      <div className="rounded-xl border border-gray-800 bg-gray-900 p-6">
+      <div className="rounded-xl border border-gray-800 bg-gray-900 p-4 sm:p-6">
         <h2 className="text-lg font-semibold text-white">Description</h2>
         <p className="mt-3 text-sm leading-relaxed text-gray-300 whitespace-pre-line">
           {offer.description}
@@ -147,7 +148,7 @@ export default async function OfferDetailPage({
 
       {/* Analyse IA */}
       {offer.analysis ? (
-        <div className="rounded-xl border border-gray-800 bg-gray-900 p-6 space-y-5">
+        <div className="rounded-xl border border-gray-800 bg-gray-900 p-4 sm:p-6 space-y-5">
           <div className="flex items-center justify-between">
             <h2 className="text-lg font-semibold text-white">Analyse IA</h2>
             <span className="rounded-full border border-gray-700 bg-gray-800 px-2 py-0.5 text-xs text-gray-400">
@@ -285,7 +286,7 @@ export default async function OfferDetailPage({
           </form>
         </div>
       ) : (
-        <div className="rounded-xl border border-dashed border-gray-700 bg-gray-900/50 p-6">
+        <div className="rounded-xl border border-dashed border-gray-700 bg-gray-900/50 p-4 sm:p-6">
           <h2 className="text-lg font-semibold text-white">Analyse IA</h2>
           <p className="mt-2 text-sm text-gray-400">
             Aucune analyse IA n&apos;a encore été générée pour cette offre.

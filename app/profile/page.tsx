@@ -2,7 +2,7 @@ import { candidateProfile } from "@/lib/profile/candidate-profile";
 
 export default function ProfilePage() {
   return (
-    <main className="mx-auto max-w-4xl space-y-6 p-6">
+    <main className="mx-auto max-w-4xl space-y-4 p-4 sm:space-y-6 sm:p-6">
       {/* Header */}
       <div>
         <h1 className="text-2xl font-bold text-white">Profil candidat</h1>

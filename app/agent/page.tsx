@@ -2,9 +2,9 @@ import { AgentQuestionForm } from "./AgentQuestionForm";
 
 export default function AgentPage() {
   return (
-    <main className="mx-auto max-w-3xl space-y-8 p-6">
+    <main className="mx-auto max-w-3xl space-y-6 p-4 sm:space-y-8 sm:p-6">
       <section className="space-y-3">
-        <h1 className="text-3xl font-bold">Agent JobRadar IA</h1>
+        <h1 className="text-2xl font-bold sm:text-3xl">Agent JobRadar IA</h1>
 
         <p className="text-gray-700">
           Cet agent peut utiliser des tools contrôlés pour explorer les offres

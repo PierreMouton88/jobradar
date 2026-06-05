@@ -9,9 +9,9 @@ export default async function ScrapingRunsPage() {
   });
 
   return (
-    <main className="mx-auto max-w-5xl px-6 py-10">
-      <div className="mb-8">
-        <h1 className="text-3xl font-bold">Historique des imports</h1>
+    <main className="mx-auto max-w-5xl px-4 py-6 sm:px-6 sm:py-10">
+      <div className="mb-6 sm:mb-8">
+        <h1 className="text-2xl font-bold sm:text-3xl">Historique des imports</h1>
         <p className="mt-2 text-gray-600">
           Cette page affiche les dernières sessions de scraping ou d’import JSON
           enregistrées en base.
@@ -21,8 +21,8 @@ export default async function ScrapingRunsPage() {
       {scrapingRuns.length === 0 ? (
         <p className="text-gray-600">Aucun import enregistré pour le moment.</p>
       ) : (
-        <div className="overflow-hidden rounded-xl border border-gray-200">
-          <table className="w-full border-collapse text-left text-sm">
+        <div className="overflow-x-auto rounded-xl border border-gray-200">
+          <table className="w-full min-w-160 border-collapse text-left text-sm">
             <thead className="bg-gray-50">
               <tr>
                 <th className="px-4 py-3 font-semibold">Source</th>
