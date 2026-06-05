@@ -7,7 +7,24 @@ export type ApifyActorInputPreset = {
 };
 
 export const apifyActorInputPresets = {
-  "indeed-nancy-dev": {
+  "indeed-nancy-dev-url": {
+    source: "indeed",
+    actorId: "MXLpngmVpE8WTESQr",
+    input: {
+      enableUniqueJobs: true,
+      fromDays: "14",
+      includeSimilarJobs: true,
+      maxRows: 20,
+      maxRowsPerUrl: 20,
+      radius: "100",
+      sort: "date",
+      urls: [
+        "https://fr.indeed.com/jobs?q=developpeur+web&l=nancy+%2854%29&fromage=14&radius=100&from=searchOnDesktopSerp&vjk=6093f05ed0227ebf",
+      ],
+    },
+  },
+
+  "indeed-nancy-dev-query": {
     source: "indeed",
     actorId: "MXLpngmVpE8WTESQr",
     input: {
@@ -18,15 +35,11 @@ export const apifyActorInputPresets = {
       location: "Nancy",
       maxRows: 20,
       maxRowsPerUrl: 20,
-      query: "Développeur ",
+      query: "Développeur",
       radius: "100",
       sort: "date",
-      urls: [
-        "https://fr.indeed.com/jobs?q=developpeur+web&l=nancy+%2854%29&fromage=14&radius=100&from=searchOnDesktopSerp&vjk=6093f05ed0227ebf",
-      ],
     },
   },
-
   "linkedin-grand-est-dev": {
     source: "linkedin",
     actorId: "worldunboxer/rapid-linkedin-scraper",

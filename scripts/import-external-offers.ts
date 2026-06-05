@@ -182,7 +182,7 @@ function formatSourceLabel(options: CliOptions): string {
   const detail =
     options.input === "apify-actor"
       ? options.preset
-      : options.actor ?? "unknown";
+      : (options.actor ?? "unknown");
 
   return ["external", options.source, options.input, detail].join(":");
 }
@@ -236,6 +236,16 @@ function createLoaderFromCliOptions(options: CliOptions) {
   }
 }
 
+function getDisplayActor(options: CliOptions): string {
+  if (options.input === "apify-actor") {
+    const preset = getApifyActorInputPreset(options.preset);
+
+    return options.actor ?? preset.actorId;
+  }
+
+  return options.actor ?? "unknown";
+}
+
 async function main() {
   const options = parseCliOptions(process.argv.slice(2));
 
@@ -268,7 +278,7 @@ async function main() {
   console.log("\nExternal import report\n");
   console.log(`Input: ${options.input}`);
   console.log(`Source: ${options.source}`);
-  console.log(`Actor: ${options.actor ?? "unknown"}`);
+  console.log(`Actor: ${getDisplayActor(options)}`);
   console.log(`Dry run: ${report.dryRun}`);
   console.log(`Limit: ${options.limit ?? "none"}`);
   console.log(`Run actor: ${options.runActor}`);
@@ -291,6 +301,9 @@ async function main() {
   console.log(`Errors: ${report.errors.length}`);
   console.log(`Scraping run id: ${report.scrapingRunId ?? "none"}`);
 
+  if (options.input === "apify-actor") {
+    console.log(`Preset: ${options.preset}`);
+  }
   if (mappingErrors.length > 0) {
     console.log("\nMapping errors:");
     for (const error of mappingErrors) {
