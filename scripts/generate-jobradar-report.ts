@@ -251,7 +251,7 @@ async function main() {
   reportLines.push(`- Runs récents affichés : ${recentRuns.length}`);
   reportLines.push(
   `- Offres à analyser avec IA en priorité : ${offersToAnalyze.length}`,
-);
+); 
 
   reportLines.push("");
   reportLines.push("## Derniers imports");
