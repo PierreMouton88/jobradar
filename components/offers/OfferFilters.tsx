@@ -1,5 +1,6 @@
 "use client";
 
+import Link from "next/link";
 import { useState } from "react";
 
 type OfferFiltersProps = {
@@ -67,12 +68,12 @@ export function OfferFilters({
         </div>
 
         <div className="flex items-center gap-2">
-          <a
+          <Link
             href="/offers"
             className="hidden rounded-md border border-gray-700 px-3 py-1.5 text-sm text-gray-200 hover:bg-gray-900 sm:inline-flex"
           >
             Réinitialiser
-          </a>
+          </Link>
 
           {/* Toggle button — mobile only */}
           <button
@@ -98,7 +99,7 @@ export function OfferFilters({
       {/* Collapsible content — always visible on sm+, toggled on mobile */}
       <div className={open ? "block" : "hidden sm:block"}>
         <p className="mt-1 text-sm text-gray-500 sm:mt-0">
-          Recherche, source, contrat, télétravail et date d'import.
+          Recherche, source, contrat, télétravail et date d&apos;import.
         </p>
 
         <form action="/offers" method="GET" className="mt-4">
@@ -173,7 +174,7 @@ export function OfferFilters({
 
             <div>
               <label htmlFor="dateRange" className={labelClassName}>
-                Date d'import
+                Date d&apos;import
               </label>
               <select
                 id="dateRange"
@@ -213,12 +214,12 @@ export function OfferFilters({
             </p>
 
             <div className="flex gap-2">
-              <a
+              <Link
                 href="/offers"
                 className="flex-1 rounded-md border border-gray-700 px-4 py-2.5 text-center text-sm text-gray-200 hover:bg-gray-900 sm:hidden"
               >
                 Réinitialiser
-              </a>
+              </Link>
               <button
                 type="submit"
                 className="flex-1 rounded-md bg-gray-100 px-4 py-2.5 text-sm font-medium text-gray-950 hover:bg-white sm:flex-none sm:py-2"

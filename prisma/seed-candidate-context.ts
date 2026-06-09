@@ -1,0 +1,224 @@
+import { prisma } from "@/lib/prisma";
+
+async function main() {
+  const candidateProfile = await prisma.candidateProfile.upsert({
+    where: {
+      id: "default-pierre-fullstack-js-ts",
+    },
+    update: {
+      name: "Pierre",
+      headline: "Développeur Fullstack JavaScript / TypeScript junior",
+      level: "junior",
+      targetRoles: [
+        "Développeur Fullstack JavaScript / TypeScript",
+        "Développeur React / Node.js",
+        "Développeur React / NestJS",
+        "Développeur backend junior Node.js / NestJS",
+        "Développeur IA appliquée junior",
+      ],
+      strongSkills: [
+        "React",
+        "TypeScript",
+        "JavaScript",
+        "Node.js",
+        "NestJS",
+        "Prisma",
+        "MySQL",
+        "API REST",
+        "Docker",
+        "Git",
+      ],
+      learningSkills: [
+        "Next.js",
+        "PostgreSQL",
+        "LLM",
+        "RAG",
+        "pgvector",
+        "agents IA",
+        "Playwright",
+        "Cheerio",
+      ],
+      preferredContracts: ["CDI", "CDD"],
+      preferredRemote: "hybrid_or_full_remote",
+      preferredLocations: ["Grand Est", "Metz", "Nancy", "Luxembourg", "Remote"],
+      positiveSignals: [
+        "React",
+        "TypeScript",
+        "Node.js",
+        "NestJS",
+        "Prisma",
+        "PostgreSQL",
+        "MySQL",
+        "Docker",
+        "API REST",
+        "tests",
+        "CI/CD",
+        "mentoring",
+        "code review",
+        "équipe technique accompagnante",
+        "projet concret",
+        "IA appliquée raisonnable",
+      ],
+      negativeSignals: [
+        "poste senior déguisé",
+        "autonomie totale immédiate",
+        "stack trop éloignée",
+        "stage uniquement",
+        "alternance uniquement",
+        "mission commerciale sans vraie pratique dev",
+        "plusieurs années d’expérience obligatoires",
+      ],
+      notes:
+        "Profil issu du positionnement JobRadar IA V2. À enrichir plus tard avec le CV Markdown et le RAG.",
+      isDefault: true,
+      isActive: true,
+    },
+    create: {
+      id: "default-pierre-fullstack-js-ts",
+      name: "Pierre",
+      headline: "Développeur Fullstack JavaScript / TypeScript junior",
+      level: "junior",
+      targetRoles: [
+        "Développeur Fullstack JavaScript / TypeScript",
+        "Développeur React / Node.js",
+        "Développeur React / NestJS",
+        "Développeur backend junior Node.js / NestJS",
+        "Développeur IA appliquée junior",
+      ],
+      strongSkills: [
+        "React",
+        "TypeScript",
+        "JavaScript",
+        "Node.js",
+        "NestJS",
+        "Prisma",
+        "MySQL",
+        "API REST",
+        "Docker",
+        "Git",
+      ],
+      learningSkills: [
+        "Next.js",
+        "PostgreSQL",
+        "LLM",
+        "RAG",
+        "pgvector",
+        "agents IA",
+        "Playwright",
+        "Cheerio",
+      ],
+      preferredContracts: ["CDI", "CDD"],
+      preferredRemote: "hybrid_or_full_remote",
+      preferredLocations: ["Grand Est", "Metz", "Nancy", "Luxembourg", "Remote"],
+      positiveSignals: [
+        "React",
+        "TypeScript",
+        "Node.js",
+        "NestJS",
+        "Prisma",
+        "PostgreSQL",
+        "MySQL",
+        "Docker",
+        "API REST",
+        "tests",
+        "CI/CD",
+        "mentoring",
+        "code review",
+        "équipe technique accompagnante",
+        "projet concret",
+        "IA appliquée raisonnable",
+      ],
+      negativeSignals: [
+        "poste senior déguisé",
+        "autonomie totale immédiate",
+        "stack trop éloignée",
+        "stage uniquement",
+        "alternance uniquement",
+        "mission commerciale sans vraie pratique dev",
+        "plusieurs années d’expérience obligatoires",
+      ],
+      notes:
+        "Profil issu du positionnement JobRadar IA V2. À enrichir plus tard avec le CV Markdown et le RAG.",
+      isDefault: true,
+      isActive: true,
+    },
+  });
+
+  await prisma.searchScenario.upsert({
+    where: {
+      id: "default-grand-est-fullstack-backend-js",
+    },
+    update: {
+      name: "Grand Est — Fullstack / Backend JS",
+      description:
+        "Scénario de recherche principal pour des postes fullstack ou backend JavaScript / TypeScript dans le Grand Est, avec ouverture au remote.",
+      candidateProfileId: candidateProfile.id,
+      targetRoles: [
+        "Développeur Fullstack",
+        "Développeur React",
+        "Développeur Node.js",
+        "Développeur NestJS",
+        "Développeur Backend JavaScript",
+        "Développeur TypeScript",
+      ],
+      keywords: [
+        "React",
+        "TypeScript",
+        "JavaScript",
+        "Node.js",
+        "NestJS",
+        "Fullstack",
+        "Backend",
+      ],
+      locations: ["Grand Est", "Metz", "Nancy", "Strasbourg", "Luxembourg", "Remote"],
+      remotePolicies: ["hybrid", "full_remote", "unknown"],
+      contractTypes: ["CDI", "CDD"],
+      sourceProviders: ["apify", "local", "manual"],
+      sourceNames: ["indeed", "linkedin"],
+      isDefault: true,
+      isActive: true,
+    },
+    create: {
+      id: "default-grand-est-fullstack-backend-js",
+      name: "Grand Est — Fullstack / Backend JS",
+      description:
+        "Scénario de recherche principal pour des postes fullstack ou backend JavaScript / TypeScript dans le Grand Est, avec ouverture au remote.",
+      candidateProfileId: candidateProfile.id,
+      targetRoles: [
+        "Développeur Fullstack",
+        "Développeur React",
+        "Développeur Node.js",
+        "Développeur NestJS",
+        "Développeur Backend JavaScript",
+        "Développeur TypeScript",
+      ],
+      keywords: [
+        "React",
+        "TypeScript",
+        "JavaScript",
+        "Node.js",
+        "NestJS",
+        "Fullstack",
+        "Backend",
+      ],
+      locations: ["Grand Est", "Metz", "Nancy", "Strasbourg", "Luxembourg", "Remote"],
+      remotePolicies: ["hybrid", "full_remote", "unknown"],
+      contractTypes: ["CDI", "CDD"],
+      sourceProviders: ["apify", "local", "manual"],
+      sourceNames: ["indeed", "linkedin"],
+      isDefault: true,
+      isActive: true,
+    },
+  });
+
+  console.log("Default candidate profile and search scenario seeded.");
+}
+
+main()
+  .catch((error) => {
+    console.error(error);
+    process.exit(1);
+  })
+  .finally(async () => {
+    await prisma.$disconnect();
+  });

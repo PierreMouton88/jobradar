@@ -52,7 +52,6 @@ async function main() {
   );
 
   const validOffers = mappedOffers.filter((item) => item.ok);
-  const invalidOffers = mappedOffers.filter((item) => !item.ok);
   const externalOffers = validOffers.map((item) => item.offer);
 const importPreviewReport = previewExternalJobOffersImport(externalOffers);
 

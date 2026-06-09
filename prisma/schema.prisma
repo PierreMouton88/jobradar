@@ -1,3 +1,4 @@
+
 generator client {
   provider = "prisma-client-js"
 }
@@ -115,4 +116,63 @@ model JobOfferEmbedding {
   updatedAt DateTime @updatedAt
 
   @@index([jobOfferId])
+}
+
+model CandidateProfile {
+  id String @id @default(cuid())
+
+  name     String
+  headline String
+  level    String
+
+  targetRoles        String[]
+  strongSkills       String[]
+  learningSkills     String[]
+  preferredContracts String[]
+  preferredRemote    String
+  preferredLocations String[]
+
+  positiveSignals String[]
+  negativeSignals String[]
+
+  notes String?
+
+  isDefault Boolean @default(false)
+  isActive  Boolean @default(true)
+
+  searchScenarios SearchScenario[]
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([isDefault])
+  @@index([isActive])
+}
+
+model SearchScenario {
+  id String @id @default(cuid())
+
+  name        String
+  description String?
+
+  candidateProfileId String
+  candidateProfile   CandidateProfile @relation(fields: [candidateProfileId], references: [id], onDelete: Cascade)
+
+  targetRoles     String[]
+  keywords        String[]
+  locations       String[]
+  remotePolicies  String[]
+  contractTypes   String[]
+  sourceProviders String[]
+  sourceNames     String[]
+
+  isDefault Boolean @default(false)
+  isActive  Boolean @default(true)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([candidateProfileId])
+  @@index([isDefault])
+  @@index([isActive])
 }

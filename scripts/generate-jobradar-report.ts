@@ -1,8 +1,9 @@
 import fs from "node:fs/promises";
 import path from "node:path";
 import { prisma } from "@/lib/prisma";
-import { candidateProfile } from "@/lib/profile/candidate-profile";
+import { mapCandidateProfileToScoringProfile } from "@/lib/search-context/map-candidate-profile-to-scoring-profile";
 import { scoreJobOffer } from "@/lib/scoring/score-job-offer";
+import { getActiveSearchContext } from "@/lib/search-context/get-active-search-context";
 
 type ScoringContractType =
   | "CDI"
@@ -127,6 +128,10 @@ function hasPromisingKeywords(offer: {
 async function main() {
   const now = new Date();
 
+  const activeSearchContext = await getActiveSearchContext();
+const scoringProfile = activeSearchContext
+  ? mapCandidateProfileToScoringProfile(activeSearchContext.candidateProfile)
+  : null;
   const [
     offersCount,
     realOffersCount,
@@ -200,34 +205,36 @@ async function main() {
     }),
   ]);
 
-  const topScoredOffers = candidateOffers
-    .map((offer) => ({
-      offer,
-      score: scoreJobOffer(
-        {
-          skills: offer.skills,
-          contractType: mapContractTypeForScoring(offer.contractType),
-          location: offer.location,
-          qualityScore: offer.qualityScore,
-          analysis: offer.analysis
-            ? {
-                experienceLevel: mapExperienceLevelForScoring(
-                  offer.analysis.experienceLevel,
-                ),
-                remotePolicy: mapRemotePolicyForScoring(
-                  offer.analysis.remotePolicy,
-                ),
-                salaryMentioned: offer.analysis.salaryMentioned,
-                redFlags: offer.analysis.redFlags,
-                positiveSignals: offer.analysis.positiveSignals,
-              }
-            : null,
-        },
-        candidateProfile,
-      ),
-    }))
-    .sort((a, b) => b.score.percentage - a.score.percentage)
-    .slice(0, 10);
+  const topScoredOffers = scoringProfile
+  ? candidateOffers
+      .map((offer) => ({
+        offer,
+        score: scoreJobOffer(
+          {
+            skills: offer.skills,
+            contractType: mapContractTypeForScoring(offer.contractType),
+            location: offer.location,
+            qualityScore: offer.qualityScore,
+            analysis: offer.analysis
+              ? {
+                  experienceLevel: mapExperienceLevelForScoring(
+                    offer.analysis.experienceLevel,
+                  ),
+                  remotePolicy: mapRemotePolicyForScoring(
+                    offer.analysis.remotePolicy,
+                  ),
+                  salaryMentioned: offer.analysis.salaryMentioned,
+                  redFlags: offer.analysis.redFlags,
+                  positiveSignals: offer.analysis.positiveSignals,
+                }
+              : null,
+          },
+          scoringProfile,
+        ),
+      }))
+      .sort((a, b) => b.score.percentage - a.score.percentage)
+      .slice(0, 10)
+  : [];
 
   const offersToAnalyze = unanalyzedOffers
     .filter((offer) =>
@@ -245,13 +252,30 @@ async function main() {
   reportLines.push("## Résumé");
   reportLines.push("");
   reportLines.push("- Mode rapport : veille réelle, sources de test exclues");
+  if (activeSearchContext) {
+    reportLines.push(
+      `- Profil candidat : ${activeSearchContext.candidateProfile.name} — ${activeSearchContext.candidateProfile.headline}`,
+    );
+    reportLines.push(
+      `- Scénario de recherche : ${activeSearchContext.searchScenario.name}`,
+    );
+    reportLines.push(
+      `- Zones ciblées : ${activeSearchContext.searchScenario.locations.join(", ")}`,
+    );
+    reportLines.push(
+      `- Mots-clés scénario : ${activeSearchContext.searchScenario.keywords.join(", ")}`,
+    );
+  } else {
+    reportLines.push("- Profil candidat : aucun profil actif trouvé");
+    reportLines.push("- Scénario de recherche : aucun scénario actif trouvé");
+  }
   reportLines.push(`- Offres totales en base : ${offersCount}`);
   reportLines.push(`- Offres réelles en base : ${realOffersCount}`);
   reportLines.push(`- Offres récentes affichées : ${recentOffers.length}`);
   reportLines.push(`- Runs récents affichés : ${recentRuns.length}`);
   reportLines.push(
-  `- Offres à analyser avec IA en priorité : ${offersToAnalyze.length}`,
-); 
+    `- Offres à analyser avec IA en priorité : ${offersToAnalyze.length}`,
+  );
 
   reportLines.push("");
   reportLines.push("## Derniers imports");

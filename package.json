@@ -29,11 +29,13 @@
     "external:preview": "tsx scripts/preview-external-import.ts",
     "external:import": "tsx scripts/import-external-offers.ts",
     "report:generate": "tsx scripts/generate-jobradar-report.ts",
+    "db:seed:candidate-context": "tsx prisma/seed-candidate-context.ts",
     "dev:rag:test-document": "tsx scripts/test-rag-document.ts",
     "dev:rag:test-db-documents": "tsx scripts/test-rag-documents-from-db.ts",
     "dev:rag:test-embedding": "tsx scripts/test-generate-embedding.ts",
     "dev:rag:create-one-embedding": "tsx scripts/test-create-job-offer-embedding.ts",
-    "dev:rag:generate-some-embeddings": "tsx scripts/generate-some-job-offer-embeddings.ts"
+    "dev:rag:generate-some-embeddings": "tsx scripts/generate-some-job-offer-embeddings.ts",
+    "dev:rag:search-context:test": "tsx scripts/test-active-search-context.ts"
   },
   "dependencies": {
     "@ai-sdk/openai": "^3.0.64",

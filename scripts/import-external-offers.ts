@@ -1,3 +1,9 @@
+
+
+// pour lancer la commande par defaut : npm run external:import -- --input=apify-actor --source=indeed --preset=indeed-nancy-dev-query --run-actor
+// pour linkedin : npm run external:import -- --input=apify-actor --source=linkedin --preset=linkedin-grand-est-dev --run-actor
+
+
 import { importExternalJobOffersToDb } from "@/lib/imports/import-external-job-offers-to-db";
 import { getApifyActorInputPreset } from "@/lib/sources/apify/apify-actor-input-presets";
 import {

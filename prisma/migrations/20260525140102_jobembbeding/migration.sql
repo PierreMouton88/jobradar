@@ -1,3 +1,5 @@
+CREATE EXTENSION IF NOT EXISTS vector;
+
 -- CreateTable
 CREATE TABLE "JobOfferEmbedding" (
     "id" TEXT NOT NULL,
