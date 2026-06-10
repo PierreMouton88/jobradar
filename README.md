@@ -63,6 +63,8 @@ Le projet couvre actuellement :
 - interface `/offers` adaptée à un vrai volume d’offres ;
 - pagination serveur, filtres, tri et responsive mobile-first ;
 - rapport Markdown local de veille ;
+- profils candidat et scénarios de recherche stockés en base ;
+- priorisation heuristique des offres avec file de priorité ;
 - tests unitaires avec Vitest ;
 - lint, build et script global de vérification.
 
@@ -89,6 +91,8 @@ ScrapingRun
 affichage Next.js
 ↓
 scoring profil
+↓
+priorisation heuristique
 ↓
 analyse IA manuelle ou contrôlée
 ↓
@@ -619,16 +623,17 @@ Fichier généré :
 reports/jobradar-report-YYYY-MM-DD.md
 ```
 
-Le rapport contient :
+Le rapport contient maintenant :
 
 - résumé global ;
 - mode rapport ;
+- profil candidat et scénario de recherche actifs ;
 - nombre total d’offres ;
 - nombre d’offres réelles ;
 - derniers imports ;
 - offres récentes ;
-- offres les plus prometteuses selon scoring ;
-- offres à analyser avec IA en priorité ;
+- file de priorité issue du scoring et des heuristiques ;
+- offres écartées par heuristique ;
 - points de vigilance qualité ;
 - liens locaux vers `/offers/[id]` ;
 - URLs sources.
@@ -645,82 +650,136 @@ Objectif produit du reporting :
 Après une collecte d’offres, comprendre rapidement :
 - ce qui a été importé ;
 - quelles offres regarder ;
-- quelles offres analyser avec IA ;
-- quelles sources posent problème ;
+- quelles offres traiter en priorité ;
+- quelles offres sont écartées par heuristique ;
+- quelles sources ou données posent problème ;
 - quelles actions faire ensuite.
 ```
 
 ---
 
-## Prochains modules
+## Modules V2 avancés
 
 ### Module 14 — Profils candidat et scénarios de recherche en base
 
-Statut : prochain module.
+Statut : terminé.
 
-Objectif : sortir le profil candidat du hardcoding TypeScript et préparer plusieurs scénarios de recherche.
+Objectif : sortir progressivement le profil candidat du hardcoding TypeScript et préparer plusieurs scénarios de recherche.
 
 Distinction retenue :
 
 ```txt
 CandidateProfile
 = qui je suis professionnellement
-= compétences, niveau, préférences générales, points forts, points faibles
+= compétences, niveau, préférences générales, signaux positifs/négatifs
 
 SearchScenario
 = ce que je cherche dans un contexte donné
-= zone géographique, type de poste, remote, contrats, mots-clés, paramètres source
+= zone géographique, type de poste, remote, contrats, mots-clés, sources
 ```
 
-Exemples :
+Éléments ajoutés :
 
-```txt
-CandidateProfile par défaut
-→ Pierre — Fullstack JS/TS junior
-
-SearchScenario par défaut
-→ Grand Est — développeur fullstack / backend JS
-
-Autre scénario possible
-→ Brest — développeur fullstack / backend JS
-
-Autre scénario possible
-→ Full remote — React / Node / TypeScript
-```
-
-Approche initiale :
-
-- modèles Prisma ;
-- seed du profil par défaut ;
-- seed du scénario Grand Est ;
+- modèles Prisma :
+  - `CandidateProfile`
+  - `SearchScenario`
+- seed du profil par défaut :
+  - `Pierre — Fullstack JS/TS junior`
+- seed du scénario par défaut :
+  - `Grand Est — Fullstack / Backend JS`
 - helpers de lecture :
   - `getDefaultCandidateProfile()`
   - `getDefaultSearchScenario()`
   - `getActiveSearchContext()`
-- branchement progressif du rapport sur le profil/scénario DB ;
-- UI de gestion reportée à la fin, mais prévue.
+- mapper :
+  - `mapCandidateProfileToScoringProfile()`
+- script de test du contexte actif ;
+- branchement du rapport Markdown sur le profil et le scénario actifs en base ;
+- scoring du rapport alimenté par le profil BDD.
 
+Point technique corrigé pendant le module :
+
+```sql
+CREATE EXTENSION IF NOT EXISTS vector;
+```
+
+Cette instruction a été ajoutée à l’ancienne migration pgvector afin d’éviter l’erreur Prisma sur la shadow database :
+
+```txt
+ERROR: type "vector" does not exist
+```
+
+L’ancien fichier `lib/profile/candidate-profile.ts` peut encore exister pour fournir le type TypeScript utilisé par le scoring, mais la source de vérité du rapport est maintenant la base.
 ---
 
 ### Module 15 — Priorisation heuristique des offres
 
-Statut : à venir.
+Statut : terminé.
 
-Objectif : déterminer quelles offres méritent d’être analysées avec IA sans consommer directement l’API.
+Objectif : créer une couche de décision au-dessus du score de compatibilité.
 
-Approche :
+Le scoring répond à :
 
 ```txt
-offres réelles non analysées
-→ profil/scénario actif
-→ score de priorité déterministe
-→ raisons positives
-→ warnings
-→ sélection top N
-→ rapport
+À quel point cette offre correspond au profil ?
 ```
 
+La priorisation répond à :
+
+```txt
+Qu’est-ce que je fais avec cette offre ?
+```
+
+Éléments ajoutés :
+
+- nouveau fichier :
+  - `lib/scoring/prioritize-job-offer.ts`
+- types de priorisation :
+  - `OfferPriorityLevel`
+  - `PriorityReason`
+  - `PrioritizedOffer`
+- fonction pure :
+  - `prioritizeJobOffer(...)`
+- tests unitaires Vitest :
+  - `lib/scoring/prioritize-job-offer.test.ts`
+- intégration dans `getOffers` pour enrichir les offres UI avec `priority` ;
+- ajout de `priority` dans le type `JobOffer` côté UI ;
+- intégration dans le rapport Markdown ;
+- remplacement des sections redondantes du rapport par une vraie file de priorité ;
+- section courte d’audit des offres écartées par heuristique.
+
+Niveaux de priorité :
+
+```txt
+very_promising
+interesting
+needs_ai_analysis
+watch
+low_priority
+probably_ignore
+```
+
+La priorisation prend notamment en compte :
+
+- le score de compatibilité ;
+- la présence ou non d’une analyse IA ;
+- le niveau d’expérience détecté ;
+- les red flags IA ;
+- la qualité des données ;
+- les titres manifestement hors cible développeur.
+
+Le rapport Markdown contient désormais notamment :
+
+```txt
+## File de priorité
+## Offres écartées par heuristique
+## Points de vigilance qualité
+```
+
+Cette étape prépare le module suivant : analyser avec IA uniquement les offres candidates, au lieu de consommer l’API sur tout le volume.
 ---
+
+## Prochains modules
 
 ### Module 16 — Analyse IA contrôlée par budget et limite
 
@@ -976,11 +1035,17 @@ npm run check
 git status
 ```
 
-Commit du module reporting :
+Commits recommandés récents :
 
 ```bash
 git add .
 git commit -m "feat(reporting): generate job watch markdown report"
+
+git add .
+git commit -m "feat(search-context): add candidate profiles and search scenarios"
+
+git add .
+git commit -m "feat(scoring): add heuristic offer prioritization"
 ```
 
 ---
@@ -1017,9 +1082,9 @@ Limites connues :
 - les imports réels dépendent des actors et exports externes ;
 - un actor Apify ne rend pas automatiquement une source juridiquement autorisée ;
 - les mappers doivent être maintenus source par source ;
-- le scoring dépend encore d’un profil principalement codé en dur ;
-- les profils/scénarios ne sont pas encore stockés en base ;
-- l’analyse IA automatique contrôlée n’est pas encore implémentée ;
+- le scoring côté UI dépend encore partiellement d’un profil TypeScript historique ;
+- les profils/scénarios sont en base, mais leur UI de gestion reste à construire ;
+- l’analyse IA automatique contrôlée par budget n’est pas encore implémentée ;
 - le RAG profil/CV/offres reste à enrichir ;
 - l’UI de pilotage V2 reste à construire ;
 - la distribution du rapport n’est pas encore faite.
