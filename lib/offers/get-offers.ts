@@ -4,6 +4,7 @@ import type { JobOffer } from "@/types/job-offer";
 import { mapContractTypeFromDb } from "@/lib/offers/offer-normalization";
 import { candidateProfile } from "@/lib/profile/candidate-profile";
 import { scoreJobOffer } from "@/lib/scoring/score-job-offer";
+import { prioritizeJobOffer } from "@/lib/scoring/prioritize-job-offer";
 
 const DEFAULT_PAGE = 1;
 const DEFAULT_PAGE_SIZE = 10;
@@ -146,6 +147,18 @@ function mapDbOfferToJobOffer(
       }
     : null;
 
+  const scorableOffer = {
+  title: offer.title,
+  skills: offer.skills,
+  contractType,
+  location: offer.location,
+  qualityScore: offer.qualityScore,
+  analysis: analysisForScore,
+};
+
+  const score = scoreJobOffer(scorableOffer, candidateProfile);
+  const priority = prioritizeJobOffer(scorableOffer, score);
+
   return {
     id: offer.id,
     title: offer.title,
@@ -175,16 +188,8 @@ function mapDbOfferToJobOffer(
           totalTokens: offer.analysis.totalTokens,
         }
       : null,
-    score: scoreJobOffer(
-      {
-        skills: offer.skills,
-        contractType,
-        location: offer.location,
-        qualityScore: offer.qualityScore,
-        analysis: analysisForScore,
-      },
-      candidateProfile,
-    ),
+    score,
+    priority,
   };
 }
 

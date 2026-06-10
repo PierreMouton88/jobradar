@@ -4,6 +4,7 @@ import { prisma } from "@/lib/prisma";
 import { mapCandidateProfileToScoringProfile } from "@/lib/search-context/map-candidate-profile-to-scoring-profile";
 import { scoreJobOffer } from "@/lib/scoring/score-job-offer";
 import { getActiveSearchContext } from "@/lib/search-context/get-active-search-context";
+import { prioritizeJobOffer } from "@/lib/scoring/prioritize-job-offer";
 
 type ScoringContractType =
   | "CDI"
@@ -129,9 +130,10 @@ async function main() {
   const now = new Date();
 
   const activeSearchContext = await getActiveSearchContext();
-const scoringProfile = activeSearchContext
-  ? mapCandidateProfileToScoringProfile(activeSearchContext.candidateProfile)
-  : null;
+  const scoringProfile = activeSearchContext
+    ? mapCandidateProfileToScoringProfile(activeSearchContext.candidateProfile)
+    : null;
+
   const [
     offersCount,
     realOffersCount,
@@ -189,6 +191,7 @@ const scoringProfile = activeSearchContext
       },
       take: 50,
     }),
+
     prisma.jobOffer.findMany({
       where: {
         AND: [
@@ -205,36 +208,55 @@ const scoringProfile = activeSearchContext
     }),
   ]);
 
-  const topScoredOffers = scoringProfile
-  ? candidateOffers
-      .map((offer) => ({
-        offer,
-        score: scoreJobOffer(
-          {
-            skills: offer.skills,
-            contractType: mapContractTypeForScoring(offer.contractType),
-            location: offer.location,
-            qualityScore: offer.qualityScore,
-            analysis: offer.analysis
-              ? {
-                  experienceLevel: mapExperienceLevelForScoring(
-                    offer.analysis.experienceLevel,
-                  ),
-                  remotePolicy: mapRemotePolicyForScoring(
-                    offer.analysis.remotePolicy,
-                  ),
-                  salaryMentioned: offer.analysis.salaryMentioned,
-                  redFlags: offer.analysis.redFlags,
-                  positiveSignals: offer.analysis.positiveSignals,
-                }
-              : null,
-          },
-          scoringProfile,
-        ),
-      }))
-      .sort((a, b) => b.score.percentage - a.score.percentage)
-      .slice(0, 10)
-  : [];
+  const scoredAndPrioritizedOffers = scoringProfile
+    ? candidateOffers.map((offer) => {
+        const analysisForScore = offer.analysis
+          ? {
+              experienceLevel: mapExperienceLevelForScoring(
+                offer.analysis.experienceLevel,
+              ),
+              remotePolicy: mapRemotePolicyForScoring(
+                offer.analysis.remotePolicy,
+              ),
+              salaryMentioned: offer.analysis.salaryMentioned,
+              redFlags: offer.analysis.redFlags,
+              positiveSignals: offer.analysis.positiveSignals,
+            }
+          : null;
+
+        const scorableOffer = {
+          title: offer.title,
+          skills: offer.skills,
+          contractType: mapContractTypeForScoring(offer.contractType),
+          location: offer.location,
+          qualityScore: offer.qualityScore,
+          analysis: analysisForScore,
+        };
+
+        const score = scoreJobOffer(scorableOffer, scoringProfile);
+        const priority = prioritizeJobOffer(scorableOffer, score);
+
+        return {
+          offer,
+          score,
+          priority,
+        };
+      })
+    : [];
+
+  const priorityQueueOffers = scoredAndPrioritizedOffers
+    .filter(({ priority }) =>
+      ["very_promising", "interesting", "needs_ai_analysis", "watch"].includes(
+        priority.priority,
+      ),
+    )
+    .toSorted((a, b) => b.score.percentage - a.score.percentage)
+    .slice(0, 15);
+
+  const ignoredByHeuristicOffers = scoredAndPrioritizedOffers
+    .filter(({ priority }) => priority.priority === "probably_ignore")
+    .toSorted((a, b) => b.score.percentage - a.score.percentage)
+    .slice(0, 5);
 
   const offersToAnalyze = unanalyzedOffers
     .filter((offer) =>
@@ -245,6 +267,26 @@ const scoringProfile = activeSearchContext
       }),
     )
     .slice(0, 10);
+
+  const priorityGroups = [
+    {
+      priority: "very_promising",
+      title: "Très prometteuses",
+    },
+    {
+      priority: "interesting",
+      title: "Intéressantes",
+    },
+    {
+      priority: "needs_ai_analysis",
+      title: "À analyser avec IA",
+    },
+    {
+      priority: "watch",
+      title: "À surveiller",
+    },
+  ] as const;
+
   const reportLines: string[] = [];
 
   reportLines.push(`# Rapport JobRadar — ${formatDateForFilename(now)}`);
@@ -252,6 +294,7 @@ const scoringProfile = activeSearchContext
   reportLines.push("## Résumé");
   reportLines.push("");
   reportLines.push("- Mode rapport : veille réelle, sources de test exclues");
+
   if (activeSearchContext) {
     reportLines.push(
       `- Profil candidat : ${activeSearchContext.candidateProfile.name} — ${activeSearchContext.candidateProfile.headline}`,
@@ -269,12 +312,19 @@ const scoringProfile = activeSearchContext
     reportLines.push("- Profil candidat : aucun profil actif trouvé");
     reportLines.push("- Scénario de recherche : aucun scénario actif trouvé");
   }
+
   reportLines.push(`- Offres totales en base : ${offersCount}`);
   reportLines.push(`- Offres réelles en base : ${realOffersCount}`);
   reportLines.push(`- Offres récentes affichées : ${recentOffers.length}`);
   reportLines.push(`- Runs récents affichés : ${recentRuns.length}`);
   reportLines.push(
-    `- Offres à analyser avec IA en priorité : ${offersToAnalyze.length}`,
+    `- Offres candidates à l’analyse IA : ${offersToAnalyze.length}`,
+  );
+  reportLines.push(
+    `- Offres dans la file de priorité : ${priorityQueueOffers.length}`,
+  );
+  reportLines.push(
+    `- Offres écartées par heuristique : ${ignoredByHeuristicOffers.length}`,
   );
 
   reportLines.push("");
@@ -319,42 +369,75 @@ const scoringProfile = activeSearchContext
   }
 
   reportLines.push("");
-  reportLines.push("## Offres les plus prometteuses");
+  reportLines.push("## File de priorité");
   reportLines.push("");
 
-  if (topScoredOffers.length === 0) {
-    reportLines.push("Aucune offre à scorer.");
+  if (priorityQueueOffers.length === 0) {
+    reportLines.push("Aucune offre prioritaire trouvée.");
   } else {
-    for (const { offer, score } of topScoredOffers) {
+    for (const group of priorityGroups) {
+      const groupOffers = priorityQueueOffers.filter(
+        ({ priority }) => priority.priority === group.priority,
+      );
+
+      if (groupOffers.length === 0) {
+        continue;
+      }
+
+      reportLines.push(`### ${group.title}`);
+      reportLines.push("");
+
+      for (const { offer, score, priority } of groupOffers) {
+        reportLines.push(`#### ${offer.title}`);
+        reportLines.push("");
+        reportLines.push(`- Priorité : ${priority.label}`);
+        reportLines.push(`- Score : ${score.percentage}% — ${score.label}`);
+        reportLines.push(`- Entreprise : ${offer.company}`);
+        reportLines.push(`- Lieu : ${offer.location}`);
+        reportLines.push(`- Source : ${offer.source}`);
+        reportLines.push(`- Contrat : ${offer.contractType}`);
+        reportLines.push(`- Télétravail : ${offer.remote ? "oui" : "non"}`);
+        reportLines.push(
+          `- Fiche locale : http://localhost:3000/offers/${offer.id}`,
+        );
+        reportLines.push(`- URL source : ${offer.url}`);
+
+        if (priority.reasons.length > 0) {
+          reportLines.push("- Raisons de priorité :");
+
+          for (const reason of priority.reasons) {
+            reportLines.push(`  - ${reason.label}`);
+          }
+        }
+
+        reportLines.push("");
+      }
+    }
+  }
+
+  reportLines.push("");
+  reportLines.push("## Offres écartées par heuristique");
+  reportLines.push("");
+
+  if (ignoredByHeuristicOffers.length === 0) {
+    reportLines.push("Aucune offre écartée par les heuristiques.");
+  } else {
+    for (const { offer, score, priority } of ignoredByHeuristicOffers) {
       reportLines.push(`### ${offer.title}`);
       reportLines.push("");
+      reportLines.push(`- Priorité : ${priority.label}`);
       reportLines.push(`- Score : ${score.percentage}% — ${score.label}`);
       reportLines.push(`- Entreprise : ${offer.company}`);
       reportLines.push(`- Lieu : ${offer.location}`);
-      reportLines.push(`- Source : ${offer.source}`);
-      reportLines.push(`- Contrat : ${offer.contractType}`);
-      reportLines.push(`- Télétravail : ${offer.remote ? "oui" : "non"}`);
       reportLines.push(
         `- Fiche locale : http://localhost:3000/offers/${offer.id}`,
       );
-      reportLines.push(`- URL source : ${offer.url}`);
 
-      const topPositiveReasons = score.positiveExplanations.slice(0, 3);
-      const topNegativeReasons = score.negativeExplanations.slice(0, 2);
+      if (priority.reasons.length > 0) {
+        reportLines.push("- Raisons d’écartement :");
 
-      if (topPositiveReasons.length > 0) {
-        reportLines.push("- Raisons positives :");
-
-        for (const reason of topPositiveReasons) {
-          reportLines.push(`  - ${reason.label} (${reason.points} pts)`);
-        }
-      }
-
-      if (topNegativeReasons.length > 0) {
-        reportLines.push("- Points à vérifier :");
-
-        for (const reason of topNegativeReasons) {
-          reportLines.push(`  - ${reason.label} (${reason.points} pts)`);
+        for (const reason of priority.reasons) {
+          reportLines.push(`  - ${reason.label}`);
         }
       }
 
@@ -373,46 +456,23 @@ const scoringProfile = activeSearchContext
       reportLines.push(`### ${offer.title}`);
       reportLines.push("");
       reportLines.push(`- Entreprise : ${offer.company}`);
-      reportLines.push(`- Source : ${offer.source}`);
       reportLines.push(`- Score qualité : ${offer.qualityScore}`);
       reportLines.push(
         `- Fiche locale : http://localhost:3000/offers/${offer.id}`,
       );
 
       if (offer.qualityIssues.length > 0) {
-        reportLines.push(`- Anomalies : ${offer.qualityIssues.join(", ")}`);
+        reportLines.push("- Problèmes détectés :");
+
+        for (const issue of offer.qualityIssues) {
+          reportLines.push(`  - ${issue}`);
+        }
       }
 
       reportLines.push("");
     }
   }
-  reportLines.push("");
-  reportLines.push("## Offres à analyser avec IA en priorité");
-  reportLines.push("");
 
-  if (offersToAnalyze.length === 0) {
-    reportLines.push("Aucune offre non analysée prioritaire trouvée.");
-  } else {
-    for (const offer of offersToAnalyze) {
-      reportLines.push(`### ${offer.title}`);
-      reportLines.push("");
-      reportLines.push(`- Entreprise : ${offer.company}`);
-      reportLines.push(`- Lieu : ${offer.location}`);
-      reportLines.push(`- Source : ${offer.source}`);
-      reportLines.push(`- Contrat : ${offer.contractType}`);
-      reportLines.push(`- Télétravail : ${offer.remote ? "oui" : "non"}`);
-      reportLines.push(
-        `- Fiche locale : http://localhost:3000/offers/${offer.id}`,
-      );
-      reportLines.push(`- URL source : ${offer.url}`);
-
-      if (offer.skills.length > 0) {
-        reportLines.push(`- Skills détectées : ${offer.skills.join(", ")}`);
-      }
-
-      reportLines.push("");
-    }
-  }
   const reportsDir = path.join(process.cwd(), "reports");
   await fs.mkdir(reportsDir, { recursive: true });
 

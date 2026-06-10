@@ -1,4 +1,6 @@
 import type { JobOfferScore } from "@/lib/scoring/score-job-offer";
+import type { PrioritizedOffer } from "@/lib/scoring/prioritize-job-offer";
+
 
 export type ContractType =
   | "CDI"
@@ -22,6 +24,7 @@ export type JobOffer = {
   createdAt: string;
   analysis?: JobAnalysisView | null;
   score?: JobOfferScore;
+  priority: PrioritizedOffer;
 };
 
 export type JobAnalysisView = {

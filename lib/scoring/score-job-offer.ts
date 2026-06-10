@@ -1,6 +1,7 @@
 import type { CandidateProfile } from "@/lib/profile/candidate-profile";
 
 export type ScorableJobOffer = {
+  title?: string;
   skills: string[];
   contractType:
     | "CDI"
