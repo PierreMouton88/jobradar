@@ -29,6 +29,7 @@
     "external:preview": "tsx scripts/preview-external-import.ts",
     "external:import": "tsx scripts/import-external-offers.ts",
     "report:generate": "tsx scripts/generate-jobradar-report.ts",
+    "ai:analyze-candidates": "tsx scripts/analyze-ai-candidates.ts",
     "db:seed:candidate-context": "tsx prisma/seed-candidate-context.ts",
     "dev:rag:test-document": "tsx scripts/test-rag-document.ts",
     "dev:rag:test-db-documents": "tsx scripts/test-rag-documents-from-db.ts",
