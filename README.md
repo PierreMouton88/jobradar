@@ -9,10 +9,12 @@ L’objectif est de construire progressivement une application capable de :
 - stocker les offres dans PostgreSQL avec Prisma ;
 - analyser les offres avec un LLM en sorties structurées validées avec Zod ;
 - comparer les offres à un profil candidat ;
+- prioriser les offres selon leur intérêt réel ;
+- analyser avec IA seulement les offres candidates, avec limite, dry-run et flag explicite ;
 - interroger les offres avec du RAG ;
 - utiliser un agent avec tools contrôlés ;
 - générer un rapport Markdown de veille ;
-- préparer ensuite des profils/scénarios de recherche, des analyses IA contrôlées, une orchestration Apify plus dynamique et une UI de pilotage.
+- préparer ensuite le RAG profil/CV/offres, une orchestration Apify plus dynamique et une UI de pilotage.
 
 Le projet avance module par module afin de rester compréhensible, maintenable et explicable en entretien.
 
@@ -34,9 +36,10 @@ sources réalistes / exports externes / actors Apify
 → import PostgreSQL
 → navigation UI sur volume réel
 → scoring profil
+→ priorisation heuristique
 → rapport Markdown de veille
 → profils candidat + scénarios de recherche
-→ analyse IA contrôlée
+→ analyse IA contrôlée par limite et budget
 → RAG profil/CV/offres
 → orchestration Apify depuis l’interface
 → distribution éventuelle du rapport
@@ -65,6 +68,7 @@ Le projet couvre actuellement :
 - rapport Markdown local de veille ;
 - profils candidat et scénarios de recherche stockés en base ;
 - priorisation heuristique des offres avec file de priorité ;
+- analyse IA contrôlée par CLI avec `--dry-run`, `--limit` et `--run` ;
 - tests unitaires avec Vitest ;
 - lint, build et script global de vérification.
 
@@ -94,7 +98,13 @@ scoring profil
 ↓
 priorisation heuristique
 ↓
-analyse IA manuelle ou contrôlée
+sélection des candidates IA
+↓
+dry-run / estimation indicative / limite max
+↓
+analyse IA contrôlée avec --run explicite
+↓
+stockage JobAnalysis
 ↓
 rapport Markdown de veille
 ```
@@ -121,6 +131,7 @@ L’objectif n’est pas seulement d’obtenir une application fonctionnelle, ma
 - comment importer des données externes hétérogènes ;
 - comment intégrer Apify sans en faire une boîte noire incontrôlée ;
 - comment construire un rapport opérationnel de veille ;
+- comment ajouter des garde-fous autour des appels IA ;
 - comment préparer un projet explicable en entretien.
 
 ---
@@ -162,6 +173,7 @@ L’objectif n’est pas seulement d’obtenir une application fonctionnelle, ma
 - Tool calling
 - Agent avec tools contrôlés
 - Mode fake IA avec `USE_FAKE_AI`
+- CLI d’analyse IA contrôlée avec limite et dry-run
 
 ### Qualité / tests
 
@@ -204,6 +216,12 @@ jobradar-ia/
 │
 ├─ lib/
 │  ├─ ai/
+│  │  ├─ analyze-job-offer.ts
+│  │  ├─ analyze-and-save-job-offer.ts
+│  │  ├─ estimate-ai-cost.ts
+│  │  ├─ get-ai-analysis-candidates.ts
+│  │  ├─ select-ai-analysis-candidates.ts
+│  │  └─ job-analysis-schema.ts
 │  ├─ agent/
 │  ├─ embeddings/
 │  ├─ imports/
@@ -211,6 +229,9 @@ jobradar-ia/
 │  ├─ profile/
 │  ├─ rag/
 │  ├─ scoring/
+│  │  ├─ score-job-offer.ts
+│  │  ├─ prioritize-job-offer.ts
+│  │  └─ map-db-offer-to-scorable-offer.ts
 │  ├─ scraping/
 │  ├─ sources/
 │  └─ prisma.ts
@@ -220,6 +241,7 @@ jobradar-ia/
 │  ├─ preview-external-import.ts
 │  ├─ import-external-offers.ts
 │  ├─ generate-jobradar-report.ts
+│  ├─ analyze-ai-candidates.ts
 │  ├─ test-job-analysis.ts
 │  ├─ test-analyze-and-save-job-offer.ts
 │  └─ ...
@@ -486,34 +508,13 @@ raw external item
 Éléments ajoutés :
 
 - format pivot `ExternalJobOffer` ;
-- champs source V2 :
-  - `sourceProvider`
-  - `sourceName`
-  - `sourceActor`
-  - `sourceTags`
-  - `rawData`
-- mappers :
-  - `mapIndeedApifyOffer`
-  - `mapLinkedinApifyOffer`
-- dispatcher :
-  - `mapExternalRawItem`
-- loader JSON :
-  - `JsonFileExternalRawItemsLoader`
-- contrats communs :
-  - `ExternalRawItemsLoadResult`
-  - `ExternalRawItemsLoader`
-- factory :
-  - `createExternalRawItemsLoader`
-- pipeline :
-  - `prepareExternalOfferForImport`
-  - `previewExternalJobOffersImport`
-  - `deduplicatePreparedExternalOffers`
-  - `prepareExternalOfferForDb`
-- import centralisé :
-  - `importExternalJobOffersToDb`
-- scripts :
-  - `preview-external-import.ts`
-  - `import-external-offers.ts`
+- champs source V2 : `sourceProvider`, `sourceName`, `sourceActor`, `sourceTags`, `rawData` ;
+- mappers Indeed et LinkedIn ;
+- dispatcher `mapExternalRawItem` ;
+- loader JSON ;
+- factory `createExternalRawItemsLoader` ;
+- pipeline de preview, préparation, déduplication et import ;
+- scripts `preview-external-import.ts` et `import-external-offers.ts`.
 
 Commandes :
 
@@ -658,9 +659,7 @@ Après une collecte d’offres, comprendre rapidement :
 
 ---
 
-## Modules V2 avancés
-
-### Module 14 — Profils candidat et scénarios de recherche en base
+### Module 14 — V2 : profils candidat et scénarios de recherche en base
 
 Statut : terminé.
 
@@ -680,19 +679,11 @@ SearchScenario
 
 Éléments ajoutés :
 
-- modèles Prisma :
-  - `CandidateProfile`
-  - `SearchScenario`
-- seed du profil par défaut :
-  - `Pierre — Fullstack JS/TS junior`
-- seed du scénario par défaut :
-  - `Grand Est — Fullstack / Backend JS`
-- helpers de lecture :
-  - `getDefaultCandidateProfile()`
-  - `getDefaultSearchScenario()`
-  - `getActiveSearchContext()`
-- mapper :
-  - `mapCandidateProfileToScoringProfile()`
+- modèles Prisma `CandidateProfile` et `SearchScenario` ;
+- seed du profil par défaut `Pierre — Fullstack JS/TS junior` ;
+- seed du scénario par défaut `Grand Est — Fullstack / Backend JS` ;
+- helpers `getDefaultCandidateProfile()`, `getDefaultSearchScenario()`, `getActiveSearchContext()` ;
+- mapper `mapCandidateProfileToScoringProfile()` ;
 - script de test du contexte actif ;
 - branchement du rapport Markdown sur le profil et le scénario actifs en base ;
 - scoring du rapport alimenté par le profil BDD.
@@ -710,9 +701,10 @@ ERROR: type "vector" does not exist
 ```
 
 L’ancien fichier `lib/profile/candidate-profile.ts` peut encore exister pour fournir le type TypeScript utilisé par le scoring, mais la source de vérité du rapport est maintenant la base.
+
 ---
 
-### Module 15 — Priorisation heuristique des offres
+### Module 15 — V2 : priorisation heuristique des offres
 
 Statut : terminé.
 
@@ -732,16 +724,10 @@ Qu’est-ce que je fais avec cette offre ?
 
 Éléments ajoutés :
 
-- nouveau fichier :
-  - `lib/scoring/prioritize-job-offer.ts`
-- types de priorisation :
-  - `OfferPriorityLevel`
-  - `PriorityReason`
-  - `PrioritizedOffer`
-- fonction pure :
-  - `prioritizeJobOffer(...)`
-- tests unitaires Vitest :
-  - `lib/scoring/prioritize-job-offer.test.ts`
+- `lib/scoring/prioritize-job-offer.ts` ;
+- types `OfferPriorityLevel`, `PriorityReason`, `PrioritizedOffer` ;
+- fonction pure `prioritizeJobOffer(...)` ;
+- tests unitaires Vitest ;
 - intégration dans `getOffers` pour enrichir les offres UI avec `priority` ;
 - ajout de `priority` dans le type `JobOffer` côté UI ;
 - intégration dans le rapport Markdown ;
@@ -776,38 +762,96 @@ Le rapport Markdown contient désormais notamment :
 ## Points de vigilance qualité
 ```
 
-Cette étape prépare le module suivant : analyser avec IA uniquement les offres candidates, au lieu de consommer l’API sur tout le volume.
+Cette étape a préparé le module 16 : analyser avec IA uniquement les offres candidates, au lieu de consommer l’API sur tout le volume.
+
+---
+
+### Module 16 — V2 : analyse IA contrôlée par budget et limite
+
+Statut : terminé.
+
+Objectif : analyser seulement les offres prioritaires et non encore analysées, avec des garde-fous stricts contre les appels IA massifs ou involontaires.
+
+Pipeline réalisé :
+
+```txt
+offres en base
+→ mapping DB vers offre compatible scoring
+→ scoreJobOffer()
+→ prioritizeJobOffer()
+→ sélection des candidates IA
+→ dry-run par défaut
+→ estimation indicative de tokens
+→ limite max par run
+→ flag explicite --run
+→ analyzeAndSaveJobOffer()
+→ stockage JobAnalysis
+→ rapport Markdown mis à jour
+```
+
+Éléments ajoutés ou modifiés :
+
+- `lib/ai/select-ai-analysis-candidates.ts` ;
+- `lib/ai/select-ai-analysis-candidates.test.ts` ;
+- `lib/ai/get-ai-analysis-candidates.ts` ;
+- `lib/scoring/map-db-offer-to-scorable-offer.ts` ;
+- `scripts/analyze-ai-candidates.ts` ;
+- script npm `ai:analyze-candidates`.
+
+La commande de sélection/analyse est :
+
+```bash
+npm run ai:analyze-candidates -- --limit=5 --dry-run
+npm run ai:analyze-candidates -- --limit=5 --run
+```
+
+Comportement :
+
+- `--dry-run` affiche les offres qui seraient analysées sans appel IA ;
+- en absence de `--run`, le dry-run reste le comportement par défaut ;
+- `--run` est obligatoire pour lancer de vrais appels IA ;
+- `--limit` limite le nombre maximal d’offres analysées ;
+- les offres déjà analysées sont ignorées ;
+- les offres `low_priority` et `probably_ignore` sont ignorées ;
+- les offres candidates sont triées par priorité puis par score ;
+- l’analyse réelle réutilise `analyzeAndSaveJobOffer()` ;
+- le fake mode `USE_FAKE_AI=true` reste respecté par la logique existante ;
+- les résultats sont stockés dans `JobAnalysis` ;
+- le rapport Markdown reflète ensuite les analyses stockées.
+
+Validation réalisée :
+
+```txt
+Dry-run initial
+→ 2 candidates détectées
+
+Run réel contrôlé avec --limit=2 --run
+→ 2 analyses OpenAI lancées
+→ JobAnalysis sauvegardées
+→ tokens affichés
+
+Dry-run suivant
+→ 0 candidate
+→ les offres déjà analysées ne sont plus proposées
+
+Rapport Markdown suivant
+→ les offres analysées ne restent plus dans needs_ai_analysis
+→ elles passent dans la file de priorité selon le score recalculé
+```
+
+Garde-fous importants :
+
+- pas d’analyse IA automatique sur toutes les offres ;
+- pas d’appel IA sans `--run` explicite ;
+- limite obligatoire par run ;
+- exclusion des offres déjà analysées ;
+- estimation indicative avant exécution ;
+- clés OpenAI toujours côté serveur/scripts ;
+- aucune action de candidature ou d’envoi automatisé.
+
 ---
 
 ## Prochains modules
-
-### Module 16 — Analyse IA contrôlée par budget et limite
-
-Statut : à venir.
-
-Objectif : analyser seulement les offres prioritaires.
-
-Approche :
-
-```txt
-offres candidates
-→ dry-run
-→ estimation coût
-→ limite max par run
-→ confirmation explicite
-→ analyse IA
-→ stockage
-→ rapport
-```
-
-Commande cible possible :
-
-```bash
-npm run ai:analyze-candidates -- --scenario=default --limit=5 --dry-run
-npm run ai:analyze-candidates -- --scenario=default --limit=5 --run
-```
-
----
 
 ### Module 17 — RAG profil/CV/offres
 
@@ -957,6 +1001,8 @@ npm run external:import -- --input=apify-actor --source=linkedin --preset=linked
 ```bash
 npm run ai:test
 npm run ai:test:save
+npm run ai:analyze-candidates -- --limit=5 --dry-run
+npm run ai:analyze-candidates -- --limit=5 --run
 ```
 
 ### Reporting
@@ -997,6 +1043,9 @@ Le projet respecte plusieurs règles :
 - ne pas appeler automatiquement l’IA sur toutes les offres ;
 - déclencher l’analyse IA manuellement ou avec un flag explicite ;
 - stocker les analyses pour éviter les appels répétés ;
+- ignorer automatiquement les offres déjà analysées dans le batch IA ;
+- limiter le nombre d’analyses par run avec `--limit` ;
+- afficher une estimation indicative avant exécution ;
 - afficher les tokens consommés ;
 - estimer le coût des requêtes IA ;
 - ne pas scraper agressivement des sources sensibles ;
@@ -1046,6 +1095,9 @@ git commit -m "feat(search-context): add candidate profiles and search scenarios
 
 git add .
 git commit -m "feat(scoring): add heuristic offer prioritization"
+
+git add .
+git commit -m "feat(ai): analyze prioritized offers with controlled CLI"
 ```
 
 ---
@@ -1069,6 +1121,8 @@ JobRadar IA permet d’expliquer :
 - comment mapper des formats hétérogènes vers un format pivot ;
 - comment intégrer Apify avec des garde-fous ;
 - comment générer un rapport opérationnel ;
+- comment prioriser des offres avec des règles déterministes ;
+- comment contrôler des appels IA batch avec dry-run, limite et flag explicite ;
 - comment préparer une application IA sérieuse avec contrôle humain.
 
 ---
@@ -1084,7 +1138,8 @@ Limites connues :
 - les mappers doivent être maintenus source par source ;
 - le scoring côté UI dépend encore partiellement d’un profil TypeScript historique ;
 - les profils/scénarios sont en base, mais leur UI de gestion reste à construire ;
-- l’analyse IA automatique contrôlée par budget n’est pas encore implémentée ;
+- l’analyse IA contrôlée existe en CLI, mais n’a pas encore d’interface dédiée ;
+- l’estimation de coût avant appel IA reste indicative ;
 - le RAG profil/CV/offres reste à enrichir ;
 - l’UI de pilotage V2 reste à construire ;
 - la distribution du rapport n’est pas encore faite.
