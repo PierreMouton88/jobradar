@@ -9,11 +9,9 @@ export type RagSearchResult = {
 };
 
 export type RagSource = {
-  jobOfferId: string;
+  sourceType: string;
+  sourceId: string;
   title: string;
-  company: string;
-  location: string;
-  contractType: string;
   distance: number;
 };
 
@@ -23,7 +21,7 @@ export type RagAnswerResult = {
 };
 
 export type RagQuestionState = {
-  answer: string | null;
   error: string | null;
+  answer: string | null;
   sources: RagSource[];
 };

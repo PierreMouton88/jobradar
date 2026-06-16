@@ -1,30 +1,30 @@
 "use server";
 
-import { answerQuestionAboutOffers } from "@/lib/rag/answer-question-about-offers";
+import { answerQuestionWithProfileAwareRag } from "@/lib/rag/answer-question-with-profile-aware-rag";
 
-export async function askOffersRagQuestion(formData: FormData) {
-  const question = formData.get("question");
+export async function askRagQuestion(formData: FormData) {
+  const question = String(formData.get("question") ?? "").trim();
 
-  if (typeof question !== "string" || !question.trim()) {
+  if (!question) {
     return {
-      error: "La question est obligatoire.",
+      error: "Pose une question pour interroger le RAG.",
       answer: null,
       sources: [],
     };
   }
 
   try {
-    const result = await answerQuestionAboutOffers(question);
+    const result = await answerQuestionWithProfileAwareRag(question, {
+      topK: 5,
+    });
 
     return {
       error: null,
       answer: result.answer,
       sources: result.sources.map((source) => ({
-        jobOfferId: source.jobOfferId,
+        sourceType: source.sourceType,
+        sourceId: source.sourceId,
         title: source.title,
-        company: source.company,
-        location: source.location,
-        contractType: source.contractType,
         distance: source.distance,
       })),
     };

@@ -1,20 +1,22 @@
 import { prisma } from "@/lib/prisma";
 
-export type RagIndexStats = {
-  totalOffers: number;
-  indexedOffers: number;
-  missingEmbeddings: number;
-};
+export async function getRagIndexStats() {
+  const genericDocuments = await prisma.ragDocumentEmbedding.findMany({
+    select: {
+      sourceType: true,
+    },
+  });
 
-export async function getRagIndexStats(): Promise<RagIndexStats> {
-  const [totalOffers, indexedOffers] = await Promise.all([
-    prisma.jobOffer.count(),
-    prisma.jobOfferEmbedding.count(),
-  ]);
+  const genericDocumentsByType = genericDocuments.reduce<Record<string, number>>(
+    (acc, document) => {
+      acc[document.sourceType] = (acc[document.sourceType] ?? 0) + 1;
+      return acc;
+    },
+    {},
+  );
 
   return {
-    totalOffers,
-    indexedOffers,
-    missingEmbeddings: totalOffers - indexedOffers,
+    genericDocumentsCount: genericDocuments.length,
+    genericDocumentsByType,
   };
 }

@@ -2,7 +2,7 @@
 
 import { useState, useTransition } from "react";
 import Link from "next/link";
-import { askOffersRagQuestion } from "../../app/rag/actions";
+import { askRagQuestion } from "@/app/rag/actions";
 import { RagQuestionState } from "@/types/rag";
 
 export function RagQuestionForm() {
@@ -16,7 +16,7 @@ export function RagQuestionForm() {
 
   function handleSubmit(formData: FormData) {
     startTransition(async () => {
-      const result = await askOffersRagQuestion(formData);
+      const result = await askRagQuestion(formData);
       setState(result);
     });
   }
@@ -26,7 +26,7 @@ export function RagQuestionForm() {
       <form action={handleSubmit} className="space-y-4">
         <div className="space-y-2">
           <label htmlFor="question" className="block font-medium">
-            Question sur les offres
+            Question sur mon profil et les offres
           </label>
 
           <textarea
@@ -63,8 +63,9 @@ export function RagQuestionForm() {
         <section className="rounded border border-amber-300 bg-amber-50 p-4 text-amber-800">
           <h2 className="font-semibold">Aucune source RAG trouvée</h2>
           <p>
-            La réponse indique qu’aucune offre indexée n’a été trouvée. Vérifie
-            que les embeddings ont bien été générés avec le script RAG.
+            La réponse indique qu’aucun document RAG indexé n’a été trouvé.
+            Vérifie que les embeddings ont bien été générés avec les scripts
+            RAG.
           </p>
         </section>
       ) : null}
@@ -73,22 +74,21 @@ export function RagQuestionForm() {
           <h2 className="text-xl font-semibold">Sources utilisées</h2>
 
           <ul className="space-y-3">
-            {state.sources.map((source, index) => (
-              <li key={source.jobOfferId} className="rounded border p-3">
-                <p className="font-medium">
-                  Source {index + 1} —{" "}
+            {state.sources.map((source) => (
+              <li key={source.sourceId} className="rounded border p-3">
+                {source.sourceType === "job_offer" ? (
                   <Link
-                    href={`/offers/${source.jobOfferId}`}
-                    className="underline underline-offset-2"
+                    href={`/offers/${source.sourceId}`}
+                    className="text-blue-600 underline"
                   >
                     {source.title}
                   </Link>
-                </p>
-                <p className="text-sm text-gray-700">
-                  {source.company} — {source.location} — {source.contractType}
-                </p>
-                <p className="text-sm text-gray-500">
-                  Distance vectorielle : {source.distance.toFixed(4)}
+                ) : (
+                  <span>{source.title}</span>
+                )}
+                <p>
+                  Type : {source.sourceType} — Distance :{" "}
+                  {source.distance.toFixed(4)}
                 </p>
               </li>
             ))}

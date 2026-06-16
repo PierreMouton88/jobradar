@@ -5,49 +5,55 @@ export default async function RagPage() {
   const stats = await getRagIndexStats();
 
   return (
-    <main className="mx-auto max-w-3xl space-y-4 p-4 sm:space-y-6 sm:p-6">
-      <div className="space-y-2">
-        <h1 className="text-2xl font-bold sm:text-3xl">Recherche RAG sur les offres</h1>
+    <main className="mx-auto max-w-4xl space-y-8 p-6">
+      <section className="space-y-3">
+        <h1 className="text-3xl font-bold">RAG JobRadar</h1>
 
         <p className="text-gray-700">
-          Pose une question en langage naturel. L’application recherche les
-          offres les plus pertinentes avec pgvector, puis demande au LLM de
-          répondre uniquement à partir de ces sources.
-        </p>
-      </div>
-
-      <section className="rounded border bg-gray-50 p-4 text-sm text-gray-700">
-        <h2 className="mb-2 font-semibold">Comment fonctionne cette page ?</h2>
-
-        <p>
-          Cette page utilise une première version de RAG. La question est
-          transformée en embedding, puis comparée aux embeddings des offres
-          stockés dans PostgreSQL avec pgvector. Les offres les plus proches
-          sont ensuite données au LLM comme sources pour générer une réponse.
+          Pose une question sur ton profil candidat et les offres indexées. Le
+          système recherche les documents les plus pertinents avec pgvector,
+          puis demande au LLM de répondre à partir de ces sources.
         </p>
 
-        <p className="mt-2">
-          Le modèle ne connaît pas directement la base de données : il répond
-          uniquement à partir des offres récupérées par la recherche
-          vectorielle.
+        <p className="text-gray-700">
+          Le RAG utilise maintenant un index documentaire générique. Il peut
+          contenir des offres d’emploi, le profil candidat actif, et plus tard
+          des documents de profil ou de CV.
         </p>
       </section>
-      <section className="grid gap-3 rounded border p-4 text-sm sm:grid-cols-3">
-        <div>
-          <p className="text-gray-500">Offres totales</p>
-          <p className="text-2xl font-semibold">{stats.totalOffers}</p>
+
+      <section className="rounded border p-4">
+        <h2 className="text-xl font-semibold">État de l’index RAG</h2>
+
+        <p className="mt-2 text-gray-700">
+          Documents indexés : <strong>{stats.genericDocumentsCount}</strong>
+        </p>
+
+        <div className="mt-2 space-y-1 text-gray-700">
+          <p>Répartition par type :</p>
+
+          {Object.entries(stats.genericDocumentsByType).length > 0 ? (
+            <ul className="list-disc pl-6">
+              {Object.entries(stats.genericDocumentsByType).map(
+                ([type, count]) => (
+                  <li key={type}>
+                    {type} : <strong>{count}</strong>
+                  </li>
+                ),
+              )}
+            </ul>
+          ) : (
+            <p>Aucun document RAG indexé.</p>
+          )}
         </div>
 
-        <div>
-          <p className="text-gray-500">Offres indexées RAG</p>
-          <p className="text-2xl font-semibold">{stats.indexedOffers}</p>
-        </div>
-
-        <div>
-          <p className="text-gray-500">Embeddings manquants</p>
-          <p className="text-2xl font-semibold">{stats.missingEmbeddings}</p>
-        </div>
+        <p className="mt-3 text-sm text-gray-500">
+          L’index RAG contient les documents utilisés pour répondre aux
+          questions : profil candidat, offres d’emploi et, plus tard, documents
+          de CV ou de profil.
+        </p>
       </section>
+
       <RagQuestionForm />
     </main>
   );

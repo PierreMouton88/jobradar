@@ -11,10 +11,10 @@ L’objectif est de construire progressivement une application capable de :
 - comparer les offres à un profil candidat ;
 - prioriser les offres selon leur intérêt réel ;
 - analyser avec IA seulement les offres candidates, avec limite, dry-run et flag explicite ;
-- interroger les offres avec du RAG ;
+- interroger les offres, le profil candidat et des documents métiers avec du RAG ;
 - utiliser un agent avec tools contrôlés ;
 - générer un rapport Markdown de veille ;
-- préparer ensuite le RAG profil/CV/offres, une orchestration Apify plus dynamique et une UI de pilotage.
+- préparer ensuite l’indexation de documents de profil/CV, une orchestration Apify plus dynamique et une UI de pilotage.
 
 Le projet avance module par module afin de rester compréhensible, maintenable et explicable en entretien.
 
@@ -40,7 +40,8 @@ sources réalistes / exports externes / actors Apify
 → rapport Markdown de veille
 → profils candidat + scénarios de recherche
 → analyse IA contrôlée par limite et budget
-→ RAG profil/CV/offres
+→ RAG générique profil + offres
+→ documents profil/CV dans le RAG
 → orchestration Apify depuis l’interface
 → distribution éventuelle du rapport
 ```
@@ -59,6 +60,7 @@ Le projet couvre actuellement :
 - analyse LLM structurée avec Zod ;
 - scoring par rapport au profil candidat ;
 - RAG avec embeddings OpenAI et pgvector ;
+- RAG générique profil-aware basé sur `RagDocumentEmbedding` ;
 - agent avec tools contrôlés ;
 - import externe depuis JSON / dataset / actors Apify ;
 - mappers source-specific Indeed et LinkedIn ;
@@ -107,6 +109,10 @@ analyse IA contrôlée avec --run explicite
 stockage JobAnalysis
 ↓
 rapport Markdown de veille
+↓
+indexation RAG générique du profil et des offres
+↓
+questions RAG profil-aware depuis /rag
 ```
 
 ---
@@ -132,6 +138,9 @@ L’objectif n’est pas seulement d’obtenir une application fonctionnelle, ma
 - comment intégrer Apify sans en faire une boîte noire incontrôlée ;
 - comment construire un rapport opérationnel de veille ;
 - comment ajouter des garde-fous autour des appels IA ;
+- comment fonctionne un RAG avec embeddings, pgvector, contexte et sources ;
+- comment faire évoluer un RAG centré offres vers un index documentaire générique ;
+- comment améliorer le retrieval avec une requête enrichie par le profil candidat ;
 - comment préparer un projet explicable en entretien.
 
 ---
@@ -169,7 +178,8 @@ L’objectif n’est pas seulement d’obtenir une application fonctionnelle, ma
 - Zod
 - Structured outputs
 - Embeddings OpenAI
-- RAG
+- RAG avec pgvector
+- RAG profil-aware avec index documentaire générique
 - Tool calling
 - Agent avec tools contrôlés
 - Mode fake IA avec `USE_FAKE_AI`
@@ -202,6 +212,7 @@ jobradar-ia/
 │  ├─ profile/
 │  │  └─ page.tsx
 │  ├─ rag/
+│  │  ├─ actions.ts
 │  │  └─ page.tsx
 │  └─ agent/
 │     └─ page.tsx
@@ -209,10 +220,12 @@ jobradar-ia/
 ├─ components/
 │  ├─ layout/
 │  │  └─ Nav.tsx
-│  └─ offers/
-│     ├─ OfferCard.tsx
-│     ├─ OfferList.tsx
-│     └─ OfferFilters.tsx
+│  ├─ offers/
+│  │  ├─ OfferCard.tsx
+│  │  ├─ OfferList.tsx
+│  │  └─ OfferFilters.tsx
+│  └─ rag/
+│     └─ RagQuestionForm.tsx
 │
 ├─ lib/
 │  ├─ ai/
@@ -223,16 +236,26 @@ jobradar-ia/
 │  │  ├─ select-ai-analysis-candidates.ts
 │  │  └─ job-analysis-schema.ts
 │  ├─ agent/
-│  ├─ embeddings/
 │  ├─ imports/
 │  ├─ offers/
 │  ├─ profile/
 │  ├─ rag/
+│  │  ├─ answer-question-with-profile-aware-rag.ts
+│  │  ├─ answer-question-with-rag-documents.ts
+│  │  ├─ build-profile-aware-rag-query.ts
+│  │  ├─ candidate-profile-rag-document.ts
+│  │  ├─ create-rag-document-embedding.ts
+│  │  ├─ generate-embedding.ts
+│  │  ├─ get-rag-index-stats.ts
+│  │  ├─ job-offer-rag-document.ts
+│  │  ├─ map-active-search-context-to-candidate-profile-rag-input.ts
+│  │  └─ search-rag-documents.ts
 │  ├─ scoring/
 │  │  ├─ score-job-offer.ts
 │  │  ├─ prioritize-job-offer.ts
 │  │  └─ map-db-offer-to-scorable-offer.ts
 │  ├─ scraping/
+│  ├─ search-context/
 │  ├─ sources/
 │  └─ prisma.ts
 │
@@ -242,8 +265,11 @@ jobradar-ia/
 │  ├─ import-external-offers.ts
 │  ├─ generate-jobradar-report.ts
 │  ├─ analyze-ai-candidates.ts
-│  ├─ test-job-analysis.ts
-│  ├─ test-analyze-and-save-job-offer.ts
+│  ├─ index-candidate-profile-rag-document.ts
+│  ├─ index-job-offers-rag-documents.ts
+│  ├─ check-rag-document-embeddings.ts
+│  ├─ test-rag-document-search.ts
+│  ├─ test-rag-document-answer.ts
 │  └─ ...
 │
 ├─ data/
@@ -446,12 +472,15 @@ Objectif : poser des questions en langage naturel sur les offres stockées.
 
 Le module a introduit :
 
-- embeddings ;
+- embeddings OpenAI ;
 - pgvector ;
+- table spécialisée `JobOfferEmbedding` ;
 - recherche vectorielle ;
 - topK ;
 - contexte injecté ;
-- réponse avec sources.
+- réponse avec sources d’offres.
+
+Note : ce RAG V1 centré offres a ensuite été généralisé au module 17 avec `RagDocumentEmbedding`.
 
 ---
 
@@ -851,24 +880,125 @@ Garde-fous importants :
 
 ---
 
-## Prochains modules
+### Module 17 — V2 : RAG profil/offres avec index documentaire générique
 
-### Module 17 — RAG profil/CV/offres
+Statut : terminé.
 
-Statut : à venir.
+Objectif : faire évoluer le RAG V1, centré sur les offres, vers un RAG plus personnalisé qui utilise à la fois le profil candidat actif et les offres indexées.
 
-Objectif : enrichir le RAG avec le profil candidat, le CV et les offres.
+Avant le module 17 :
 
-Approche initiale :
+```txt
+JobOffer
+→ buildJobOfferRagDocument()
+→ JobOfferEmbedding
+→ recherche vectorielle sur les offres
+→ réponse RAG avec sources d’offres
+```
 
-- garder le CV en Markdown ;
-- ajouter un document profil/CV comme source RAG ;
-- utiliser ces documents pour les analyses personnalisées ;
-- préparer la génération de brouillons de candidature.
+Après le module 17 :
+
+```txt
+CandidateProfile + SearchScenario
+→ document RAG de profil
+→ RagDocumentEmbedding(sourceType = candidate_profile)
+
+JobOffer
+→ document RAG d’offre
+→ RagDocumentEmbedding(sourceType = job_offer)
+
+question utilisateur
+→ requête enrichie avec le profil actif
+→ recherche vectorielle générique
+→ réponse LLM avec sources mixtes
+→ UI /rag
+```
+
+Éléments ajoutés :
+
+- modèle Prisma `RagDocumentEmbedding` ;
+- index documentaire générique basé sur `sourceType`, `sourceId`, `title`, `content`, `metadata`, `embedding` ;
+- document RAG du profil candidat actif ;
+- mapping `CandidateProfile + SearchScenario → CandidateProfileRagInput` ;
+- fonction générique `createRagDocumentEmbedding()` ;
+- recherche vectorielle générique `searchRagDocuments()` ;
+- réponse RAG générique `answerQuestionWithRagDocuments()` ;
+- requête enrichie profil-aware avec `buildProfileAwareRagQuery()` ;
+- orchestration `answerQuestionWithProfileAwareRag()` ;
+- scripts d’indexation et de test RAG générique ;
+- adaptation de `/rag` aux sources génériques.
+
+Scripts RAG ajoutés ou utilisés :
+
+```bash
+npm run rag:preview-profile-document
+npm run rag:index-profile-document
+npm run rag:index-job-offer-documents
+npm run rag:check-documents
+npm run rag:search-documents
+npm run rag:answer-documents
+```
+
+Le nouvel index peut contenir plusieurs types de documents :
+
+```txt
+candidate_profile
+job_offer
+profile_document plus tard
+```
+
+La page `/rag` utilise maintenant le nouveau RAG profil-aware :
+
+```txt
+question utilisateur
+→ récupération du profil actif
+→ enrichissement de la requête avec les compétences, rôles ciblés, lieux et points de vigilance
+→ recherche dans RagDocumentEmbedding
+→ réponse LLM à partir des documents récupérés
+→ affichage des sources génériques
+```
+
+Pourquoi la requête enrichie est utile : une question vague comme “quelles offres sont cohérentes avec ma recherche ?” ne contient pas forcément les mots-clés React, TypeScript, junior ou Grand Est. Le module 17 enrichit donc la requête de retrieval avec le profil actif, tout en gardant la question originale pour la réponse LLM.
+
+Décision importante : l’ancien index `JobOfferEmbedding` peut encore exister pour compatibilité historique, mais l’interface `/rag` s’appuie maintenant sur l’index générique `RagDocumentEmbedding`.
+
+Limite volontaire : le module 17 indexe le profil structuré et les offres. Les documents longs de profil, le “lore” candidat et le CV Markdown sont reportés au module suivant pour garder un périmètre clair.
 
 ---
 
-### Module 18 — Presets Apify dynamiques et interface de lancement
+## Prochains modules
+
+### Module 18 — Documents profil/CV dans le RAG
+
+Statut : à venir.
+
+Objectif : enrichir le nouvel index RAG générique avec des documents personnels plus longs que le profil structuré.
+
+Approche recommandée :
+
+```txt
+data/profile/pierre-profile-lore.md
+data/profile/cv-pierre.md
+→ lecture du Markdown
+→ createRagDocumentEmbedding(sourceType = profile_document)
+→ recherche RAG profil structuré + lore + CV + offres
+```
+
+Ce module permettra d’ajouter :
+
+- parcours détaillé ;
+- reconversion ;
+- préférences professionnelles ;
+- contexte de recherche ;
+- points forts transverses ;
+- CV Markdown ;
+- documents utiles pour de futures candidatures.
+
+À éviter au début : parser directement un PDF CV. Une version Markdown ou texte propre est plus fiable pour apprendre et garder un RAG explicable.
+
+---
+
+### Module 19 — Presets Apify dynamiques et interface de lancement
 
 Statut : à venir.
 
@@ -897,7 +1027,7 @@ Garde-fous :
 
 ---
 
-### Module 19 — UI de pilotage
+### Module 20 — UI de pilotage
 
 Statut : à venir.
 
@@ -914,7 +1044,7 @@ Objectif : rendre le projet démontrable et compréhensible pour un public non t
 
 ---
 
-### Module 20 — Distribution du rapport
+### Module 21 — Distribution du rapport
 
 Statut : à venir.
 
@@ -945,7 +1075,7 @@ Aucune action sensible automatique.
 - `/scraping-runs` : historique des imports/runs.
 - `/data-quality` : qualité technique des données.
 - `/profile` : profil candidat actuel.
-- `/rag` : interface RAG.
+- `/rag` : interface RAG profil-aware utilisant le profil candidat et les offres indexées.
 - `/agent` : agent avec tools contrôlés.
 - `/fake-dynamic-jobs` : page locale de test Playwright.
 
@@ -1005,6 +1135,26 @@ npm run ai:analyze-candidates -- --limit=5 --dry-run
 npm run ai:analyze-candidates -- --limit=5 --run
 ```
 
+### RAG
+
+```bash
+npm run rag:preview-profile-document
+npm run rag:index-profile-document
+npm run rag:index-job-offer-documents
+npm run rag:check-documents
+npm run rag:search-documents
+npm run rag:answer-documents
+```
+
+Utilisation recommandée après de nouveaux imports d’offres :
+
+```bash
+npm run rag:index-job-offer-documents
+npm run rag:check-documents
+```
+
+Note : le script actuel d’indexation des offres peut volontairement limiter le nombre d’offres indexées afin de contrôler les coûts OpenAI.
+
 ### Reporting
 
 ```bash
@@ -1048,6 +1198,7 @@ Le projet respecte plusieurs règles :
 - afficher une estimation indicative avant exécution ;
 - afficher les tokens consommés ;
 - estimer le coût des requêtes IA ;
+- contrôler le volume d’embeddings générés pour le RAG ;
 - ne pas scraper agressivement des sources sensibles ;
 - ne pas contourner de protections anti-bot ;
 - traiter Apify comme une source externe contrôlée, pas comme une autorisation automatique ;
@@ -1098,6 +1249,9 @@ git commit -m "feat(scoring): add heuristic offer prioritization"
 
 git add .
 git commit -m "feat(ai): analyze prioritized offers with controlled CLI"
+
+git add .
+git commit -m "feat(rag): add profile-aware generic document retrieval"
 ```
 
 ---
@@ -1123,6 +1277,10 @@ JobRadar IA permet d’expliquer :
 - comment générer un rapport opérationnel ;
 - comment prioriser des offres avec des règles déterministes ;
 - comment contrôler des appels IA batch avec dry-run, limite et flag explicite ;
+- comment fonctionne un RAG avec embeddings et pgvector ;
+- pourquoi généraliser un index RAG avec `sourceType` / `sourceId` ;
+- comment enrichir le retrieval avec un profil candidat actif ;
+- comment afficher des sources RAG mixtes dans l’interface ;
 - comment préparer une application IA sérieuse avec contrôle humain.
 
 ---
@@ -1140,7 +1298,9 @@ Limites connues :
 - les profils/scénarios sont en base, mais leur UI de gestion reste à construire ;
 - l’analyse IA contrôlée existe en CLI, mais n’a pas encore d’interface dédiée ;
 - l’estimation de coût avant appel IA reste indicative ;
-- le RAG profil/CV/offres reste à enrichir ;
+- le RAG générique indexe déjà le profil structuré et des offres, mais pas encore le CV ou les documents longs de profil ;
+- l’ancien index `JobOfferEmbedding` existe encore comme héritage V1 et pourra être déprécié plus tard ;
+- l’indexation RAG des nouvelles offres doit encore être lancée manuellement après import ;
 - l’UI de pilotage V2 reste à construire ;
 - la distribution du rapport n’est pas encore faite.
 

@@ -176,3 +176,23 @@ model SearchScenario {
   @@index([isDefault])
   @@index([isActive])
 }
+
+model RagDocumentEmbedding {
+  id String @id @default(cuid())
+
+  sourceType String
+  sourceId   String
+  title      String
+  content    String
+  metadata   Json?
+
+  embedding Unsupported("vector(1536)")
+  modelName String @default("text-embedding-3-small")
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@unique([sourceType, sourceId])
+  @@index([sourceType])
+  @@index([sourceId])
+}
