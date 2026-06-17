@@ -1,9 +1,11 @@
 import { searchRagDocuments } from "@/lib/rag/search-rag-documents";
+import { readCliQuestion } from "@/lib/cli/read-cli-question";
 
 async function main() {
-const query =
-  "Quelles offres semblent compatibles avec mon profil de développeur fullstack JavaScript TypeScript junior ?";
-
+const query = readCliQuestion({
+  fallbackQuestion:
+    "Quelles offres semblent compatibles avec mon profil de développeur fullstack JavaScript TypeScript junior ?",
+});
   console.log("Question :");
   console.log(query);
 

@@ -17,8 +17,8 @@ export default async function RagPage() {
 
         <p className="text-gray-700">
           Le RAG utilise maintenant un index documentaire générique. Il peut
-          contenir des offres d’emploi, le profil candidat actif, et plus tard
-          des documents de profil ou de CV.
+          contenir des offres d’emploi, le profil candidat actif, ainsi que des
+          documents de profil ou de CV.
         </p>
       </section>
 
@@ -49,8 +49,8 @@ export default async function RagPage() {
 
         <p className="mt-3 text-sm text-gray-500">
           L’index RAG contient les documents utilisés pour répondre aux
-          questions : profil candidat, offres d’emploi et, plus tard, documents
-          de CV ou de profil.
+          questions : profil candidat, offres d’emploi, documents de profil et
+          CV Markdown.
         </p>
       </section>
 

@@ -1,8 +1,11 @@
 import { answerQuestionWithProfileAwareRag } from "@/lib/rag/answer-question-with-profile-aware-rag";
+import { readCliQuestion } from "@/lib/cli/read-cli-question";
 
 async function main() {
-  const question =
-    "À partir de mon profil et des offres indexées, quelles offres semblent les plus cohérentes avec ma recherche ?";
+const question = readCliQuestion({
+  fallbackQuestion:
+    "À partir de mon profil et des offres indexées, quelles offres semblent les plus cohérentes avec ma recherche ?",
+});
 
   console.log("Question :");
   console.log(question);
