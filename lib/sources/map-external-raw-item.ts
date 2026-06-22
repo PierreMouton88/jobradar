@@ -6,8 +6,10 @@ import type {
 } from "../../types/external-job-offer";
 import { indeedApifyOfferSchema } from "../../types/sources/indeed-apify";
 import { linkedinApifyOfferSchema } from "../../types/sources/linkedin-apify";
+import { mapMeteojobApifyOffer } from "./apify/meteojob/map-meteojob-apify-offer";
+import { meteojobApifyOfferSchema } from "../../types/sources/meteojob-apify";
 
-export type SupportedExternalSource = "indeed" | "linkedin";
+export type SupportedExternalSource = "indeed" | "linkedin" | "meteojob";
 
 export type ExternalRawItemMappingResult =
   | {
@@ -44,7 +46,23 @@ export function mapExternalRawItem(
       offer: mapIndeedApifyOffer(parsed.data, context),
     };
   }
+  if (source === "meteojob") {
+    const parsed = meteojobApifyOfferSchema.safeParse(rawItem);
 
+    if (!parsed.success) {
+      return {
+        ok: false,
+        index,
+        error: parsed.error.format(),
+      };
+    }
+
+    return {
+      ok: true,
+      index,
+      offer: mapMeteojobApifyOffer(parsed.data, context),
+    };
+  }
   const parsed = linkedinApifyOfferSchema.safeParse(rawItem);
 
   if (!parsed.success) {

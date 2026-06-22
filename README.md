@@ -14,7 +14,8 @@ L’objectif est de construire progressivement une application capable de :
 - interroger les offres, le profil candidat et les documents profil/CV avec du RAG ;
 - utiliser un agent avec tools contrôlés ;
 - générer un rapport Markdown de veille ;
-- préparer ensuite une orchestration Apify plus dynamique et une UI de pilotage.
+- générer des inputs Apify dynamiques depuis les scénarios de recherche ;
+- préparer ensuite une UI de pilotage.
 
 Le projet avance module par module afin de rester compréhensible, maintenable et explicable en entretien.
 
@@ -41,6 +42,8 @@ sources réalistes / exports externes / actors Apify
 → profils candidat + scénarios de recherche
 → analyse IA contrôlée par limite et budget
 → RAG générique profil + documents profil/CV + offres
+→ inputs Apify dynamiques depuis SearchScenario
+→ runs Apify contrôlés depuis CLI
 → orchestration Apify depuis l’interface
 → distribution éventuelle du rapport
 ```
@@ -63,7 +66,9 @@ Le projet couvre actuellement :
 - documents profil/CV Markdown indexés dans le RAG avec `sourceType = profile_document` ;
 - agent avec tools contrôlés ;
 - import externe depuis JSON / dataset / actors Apify ;
-- mappers source-specific Indeed et LinkedIn ;
+- génération dynamique d’inputs Apify depuis `SearchScenario` ;
+- adapters Apify pour Indeed, LinkedIn et Meteojob ;
+- mappers source-specific Indeed, LinkedIn et Meteojob ;
 - format pivot `ExternalJobOffer` ;
 - interface `/offers` adaptée à un vrai volume d’offres ;
 - pagination serveur, filtres, tri et responsive mobile-first ;
@@ -81,6 +86,7 @@ Le projet couvre actuellement :
 ```txt
 sources fictives / pages contrôlées
 ou exports JSON / datasets / actors Apify
+ou inputs Apify générés depuis le scénario actif
 ↓
 mappers source-specific ou mapping externe
 ↓
@@ -136,6 +142,8 @@ L’objectif n’est pas seulement d’obtenir une application fonctionnelle, ma
 - comment tracer les tokens et les coûts d’une analyse IA ;
 - comment importer des données externes hétérogènes ;
 - comment intégrer Apify sans en faire une boîte noire incontrôlée ;
+- comment transformer un scénario de recherche métier en input technique propre à chaque actor ;
+- pourquoi isoler les différences de formats dans des adapters et des mappers ;
 - comment construire un rapport opérationnel de veille ;
 - comment ajouter des garde-fous autour des appels IA ;
 - comment fonctionne un RAG avec embeddings, pgvector, contexte et sources ;
@@ -164,6 +172,7 @@ L’objectif n’est pas seulement d’obtenir une application fonctionnelle, ma
 - Exports JSON externes
 - Datasets Apify
 - Actors Apify contrôlés
+- Adapters Apify dynamiques depuis les scénarios de recherche
 
 ### Base de données
 
@@ -260,14 +269,25 @@ jobradar-ia/
 │  │  ├─ prioritize-job-offer.ts
 │  │  └─ map-db-offer-to-scorable-offer.ts
 │  ├─ scraping/
+│  ├─ search/
+│  │  └─ job-search-criteria.ts
 │  ├─ search-context/
 │  ├─ sources/
+│  │  ├─ apify/
+│  │  │  ├─ apify-actor-adapter.ts
+│  │  │  ├─ apify-actor-adapters.ts
+│  │  │  ├─ apify-actor-run-plan.ts
+│  │  │  ├─ indeed/
+│  │  │  ├─ linkedin/
+│  │  │  └─ meteojob/
+│  │  └─ map-external-raw-item.ts
 │  └─ prisma.ts
 │
 ├─ scripts/
 │  ├─ import-scraped-jobs.ts
 │  ├─ preview-external-import.ts
 │  ├─ import-external-offers.ts
+│  ├─ preview-apify-actor-inputs.ts
 │  ├─ generate-jobradar-report.ts
 │  ├─ analyze-ai-candidates.ts
 │  ├─ preview-candidate-profile-rag-document.ts
@@ -290,6 +310,13 @@ jobradar-ia/
 │
 ├─ reports/
 │  └─ jobradar-report-YYYY-MM-DD.md
+│
+├─ types/
+│  ├─ external-job-offer.ts
+│  └─ sources/
+│     ├─ indeed-apify.ts
+│     ├─ linkedin-apify.ts
+│     └─ meteojob-apify.ts
 │
 ├─ prisma/
 │  ├─ schema.prisma
@@ -569,7 +596,7 @@ Le CLI supporte notamment :
 --input=json
 --input=apify-dataset
 --input=apify-actor
---source=indeed|linkedin
+--source=indeed|linkedin|meteojob
 --actor=...
 --dataset-id=...
 --preset=...
@@ -1076,36 +1103,126 @@ Limite volontaire : les documents sont indexés en bloc. Le chunking par section
 
 ---
 
-## Prochains modules
+### Module 19 — V2 : presets Apify dynamiques et adapters par source
 
-### Module 19 — Presets Apify dynamiques et interface de lancement
+Statut : terminé.
 
-Statut : à venir.
+Objectif : ne plus dépendre uniquement de presets Apify hardcodés, mais générer des inputs Apify depuis le scénario de recherche actif, tout en gardant les anciens presets compatibles.
 
-Objectif : ne plus hardcoder chaque preset Apify.
-
-Approche :
+Avant le module 19 :
 
 ```txt
-SearchScenario
-→ variables de recherche
-→ template d’input actor
-→ run Apify contrôlé
+--preset=indeed-nancy-dev
+→ input Apify hardcodé
+→ run actor
 → dataset
-→ mapper
-→ import DB
-→ rapport
+→ mapping
+→ import
 ```
 
-Garde-fous :
+Après le module 19 :
 
-- pas de lancement sans confirmation ;
-- pas de contournement anti-bot ;
-- limites de volume ;
-- coût surveillé ;
-- logs de run.
+```txt
+SearchScenario actif
+→ JobSearchCriteria
+→ ApifyActorAdapter
+→ run plan par source / localisation
+→ preview de l’input généré
+→ run actor contrôlé avec --run-actor
+→ dataset
+→ mapper source-specific
+→ import PostgreSQL
+```
+
+Éléments ajoutés :
+
+- type `JobSearchCriteria` ;
+- fonction `mapSearchScenarioToJobSearchCriteria()` ;
+- fonction `buildCompactSearchText()` pour éviter les requêtes Apify trop longues ;
+- type `ApifyActorAdapter` ;
+- registry d’adapters Apify ;
+- limites minimales et limites par défaut par actor ;
+- helpers `getSafeLimit()` et `getPrimaryLocation()` ;
+- adapters Apify pour Indeed, LinkedIn et Meteojob ;
+- stratégie spécifique Meteojob avec URL de recherche `meteojob.com/jobs?...` ;
+- run plan Apify par localisation avec `buildApifyActorRunPlan()` ;
+- script `preview-apify-actor-inputs.ts` ;
+- script npm `apify:preview-inputs` ;
+- option CLI `--from-scenario` dans `external:import` ;
+- option CLI `--location=...` pour cibler une localisation ;
+- support de `--source=meteojob` ;
+- affichage de l’input Apify généré avant lancement réel ;
+- affichage de la limite effective envoyée à l’actor ;
+- schéma Zod Meteojob ;
+- mapper Meteojob vers `ExternalJobOffer` ;
+- tests unitaires pour les critères de recherche, adapters, run plans et mapper Meteojob.
+
+Sources Apify validées dans ce module :
+
+```txt
+indeed
+linkedin
+meteojob
+```
+
+Commandes utiles :
+
+```bash
+npm run apify:preview-inputs
+
+npm run apify:preview-inputs -- --source=indeed --location=Nancy --limit=5
+npm run apify:preview-inputs -- --source=linkedin --location="Grand Est" --limit=5
+npm run apify:preview-inputs -- --source=meteojob --location="Grand Est" --limit=25
+
+npm run external:import -- --input=apify-actor --source=indeed --from-scenario --location=Nancy --limit=5 --dry-run --run-actor
+
+npm run external:import -- --input=apify-actor --source=linkedin --from-scenario --location="Grand Est" --limit=5 --dry-run --run-actor
+
+npm run external:import -- --input=apify-actor --source=meteojob --from-scenario --location="Grand Est" --limit=25 --dry-run --run-actor
+```
+
+Ce que le module a validé :
+
+```txt
+Indeed
+→ input dynamique depuis SearchScenario
+→ run Apify réel
+→ raw item récupéré
+→ mapping réussi
+→ dry-run sans écriture DB
+
+LinkedIn
+→ input dynamique depuis SearchScenario
+→ limite demandée 5 remontée à 10 par l’adapter
+→ run Apify réel
+→ 0 résultat avec Grand Est, mais pipeline sans erreur
+
+Meteojob
+→ input URL généré dynamiquement
+→ actor stealth_mode/meteojob-jobs-search-scraper
+→ résultats récupérés
+→ mapping vers ExternalJobOffer
+→ import possible
+```
+
+Décisions importantes :
+
+- les anciens presets restent disponibles ;
+- le nouveau mode `--from-scenario` est optionnel ;
+- un vrai lancement Apify exige toujours `--run-actor` ;
+- `--dry-run` empêche l’écriture en base, mais ne bloque pas le coût Apify si `--run-actor` est présent ;
+- les différences entre actors sont isolées dans les adapters ;
+- les différences entre formats de sortie sont isolées dans les mappers ;
+- Meteojob utilise une requête plus large que Indeed/LinkedIn, car son moteur retourne mieux des résultats avec une recherche courte ;
+- le préfiltre profil avant import n’est pas ajouté dans ce module.
+
+Limite volontaire :
+
+Le module 19 ne construit pas encore une UI de pilotage et ne lance pas automatiquement plusieurs localisations en un seul run. Le préfiltrage profil des offres externes avant import est reporté à une phase de polish, car Meteojob peut produire du bruit avec une requête large.
 
 ---
+
+## Prochains modules
 
 ### Module 20 — UI de pilotage
 
@@ -1194,9 +1311,10 @@ npm run db:import:scraped
 ```bash
 npm run external:preview
 npm run external:import
+npm run apify:preview-inputs
 ```
 
-Exemples :
+Exemples historiques avec presets :
 
 ```bash
 npm run external:import -- --input=json --source=indeed --actor=MXLpngmVpE8WTESQr --dry-run --limit=3 ./data/external/indeed-apify-export.json
@@ -1204,6 +1322,33 @@ npm run external:import -- --input=json --source=indeed --actor=MXLpngmVpE8WTESQ
 npm run external:import -- --input=apify-actor --source=indeed --preset=indeed-nancy-dev --dry-run --run-actor
 
 npm run external:import -- --input=apify-actor --source=linkedin --preset=linkedin-grand-est-dev --dry-run --run-actor
+```
+
+Preview des inputs Apify générés depuis le scénario actif :
+
+```bash
+npm run apify:preview-inputs
+npm run apify:preview-inputs -- --source=indeed --location=Nancy --limit=5
+npm run apify:preview-inputs -- --source=linkedin --location="Grand Est" --limit=5
+npm run apify:preview-inputs -- --source=meteojob --location="Grand Est" --limit=25
+```
+
+Imports Apify dynamiques depuis le scénario actif :
+
+```bash
+npm run external:import -- --input=apify-actor --source=indeed --from-scenario --location=Nancy --limit=5 --dry-run --run-actor
+
+npm run external:import -- --input=apify-actor --source=linkedin --from-scenario --location="Grand Est" --limit=5 --dry-run --run-actor
+
+npm run external:import -- --input=apify-actor --source=meteojob --from-scenario --location="Grand Est" --limit=25 --dry-run --run-actor
+```
+
+Sources supportées à ce stade :
+
+```txt
+indeed
+linkedin
+meteojob
 ```
 
 ### IA
@@ -1307,6 +1452,9 @@ Le projet respecte plusieurs règles :
 - ne pas scraper agressivement des sources sensibles ;
 - ne pas contourner de protections anti-bot ;
 - traiter Apify comme une source externe contrôlée, pas comme une autorisation automatique ;
+- prévisualiser les inputs Apify dynamiques avant lancement réel ;
+- garder `--run-actor` obligatoire pour tout lancement d’actor ;
+- distinguer limite demandée et limite effective imposée par un adapter ;
 - garder les futures actions d’agent sous contrôle humain ;
 - ne pas automatiser les candidatures.
 
@@ -1360,6 +1508,9 @@ git commit -m "feat(rag): add profile-aware generic document retrieval"
 
 git add .
 git commit -m "feat(rag): index profile markdown documents"
+
+git add .
+git commit -m "feat(apify): generate actor inputs from search scenarios"
 ```
 
 ---
@@ -1382,6 +1533,9 @@ JobRadar IA permet d’expliquer :
 - comment importer des datasets externes ;
 - comment mapper des formats hétérogènes vers un format pivot ;
 - comment intégrer Apify avec des garde-fous ;
+- comment générer des inputs Apify depuis un scénario de recherche ;
+- pourquoi utiliser des adapters par actor plutôt qu’un mapping universel ;
+- comment intégrer une nouvelle source comme Meteojob sans casser le pipeline existant ;
 - comment générer un rapport opérationnel ;
 - comment prioriser des offres avec des règles déterministes ;
 - comment contrôler des appels IA batch avec dry-run, limite et flag explicite ;
@@ -1404,6 +1558,9 @@ Limites connues :
 - les imports réels dépendent des actors et exports externes ;
 - un actor Apify ne rend pas automatiquement une source juridiquement autorisée ;
 - les mappers doivent être maintenus source par source ;
+- les adapters Apify doivent aussi être maintenus source par source ;
+- Meteojob peut produire du bruit avec une requête large comme `développeur web` ;
+- le préfiltre profil avant import n’est pas encore branché ;
 - le scoring côté UI dépend encore partiellement d’un profil TypeScript historique ;
 - les profils/scénarios sont en base, mais leur UI de gestion reste à construire ;
 - l’analyse IA contrôlée existe en CLI, mais n’a pas encore d’interface dédiée ;
@@ -1414,6 +1571,7 @@ Limites connues :
 - l’ancien index `JobOfferEmbedding` existe encore comme héritage V1 et pourra être déprécié plus tard ;
 - l’indexation RAG des nouvelles offres doit encore être lancée manuellement après import ;
 - l’UI de pilotage V2 reste à construire ;
+- le lancement multi-localisations automatique reste à cadrer avec des limites explicites ;
 - la distribution du rapport n’est pas encore faite.
 
 Ces limites sont volontaires : le projet avance module par module.

@@ -1,8 +1,5 @@
-
-
 // pour lancer la commande par defaut : npm run external:import -- --input=apify-actor --source=indeed --preset=indeed-nancy-dev-query --run-actor
 // pour linkedin : npm run external:import -- --input=apify-actor --source=linkedin --preset=linkedin-grand-est-dev --run-actor
-
 
 import { importExternalJobOffersToDb } from "@/lib/imports/import-external-job-offers-to-db";
 import { getApifyActorInputPreset } from "@/lib/sources/apify/apify-actor-input-presets";
@@ -11,8 +8,12 @@ import {
   type ExternalRawItemsInputKind,
 } from "@/lib/sources/create-external-raw-items-loader";
 import { mapExternalRawItem } from "@/lib/sources/map-external-raw-item";
+import { getActiveSearchContext } from "@/lib/search-context/get-active-search-context";
+import { mapSearchScenarioToJobSearchCriteria } from "@/lib/search/job-search-criteria";
+import { getApifyActorAdapter } from "@/lib/sources/apify/apify-actor-adapters";
+import { buildApifyActorRunPlan } from "@/lib/sources/apify/apify-actor-run-plan";
 
-type SupportedExternalSource = "indeed" | "linkedin";
+type SupportedExternalSource = "indeed" | "linkedin" | "meteojob";
 
 type BaseCliOptions = {
   source: SupportedExternalSource;
@@ -20,6 +21,7 @@ type BaseCliOptions = {
   dryRun: boolean;
   limit?: number;
   runActor: boolean;
+  location?: string;
 };
 
 type CliOptions =
@@ -33,7 +35,8 @@ type CliOptions =
     })
   | (BaseCliOptions & {
       input: "apify-actor";
-      preset: string;
+      preset?: string;
+      fromScenario: boolean;
     });
 
 function parseCliOptions(args: string[]): CliOptions {
@@ -46,18 +49,20 @@ function parseCliOptions(args: string[]): CliOptions {
   let datasetId: string | undefined;
   let preset: string | undefined;
   let runActor = false;
+  let fromScenario = false;
+  let location: string | undefined;
 
   for (const arg of args) {
     if (arg.startsWith("--source=")) {
-      const value = arg.replace("--source=", "");
+  const value = arg.replace("--source=", "");
 
-      if (value !== "indeed" && value !== "linkedin") {
-        throw new Error(`Source non supportée : ${value}`);
-      }
+  if (value !== "indeed" && value !== "linkedin" && value !== "meteojob") {
+    throw new Error(`Source non supportée : ${value}`);
+  }
 
-      source = value;
-      continue;
-    }
+  source = value;
+  continue;
+}
 
     if (arg.startsWith("--actor=")) {
       actor = arg.replace("--actor=", "");
@@ -109,6 +114,15 @@ function parseCliOptions(args: string[]): CliOptions {
       limit = value;
       continue;
     }
+    if (arg === "--from-scenario") {
+      fromScenario = true;
+      continue;
+    }
+
+    if (arg.startsWith("--location=")) {
+      location = arg.replace("--location=", "");
+      continue;
+    }
 
     if (!arg.startsWith("--")) {
       filePath = arg;
@@ -119,7 +133,9 @@ function parseCliOptions(args: string[]): CliOptions {
   }
 
   if (!source) {
-    throw new Error("Argument requis manquant : --source=indeed|linkedin");
+    throw new Error(
+      "Argument requis manquant : --source=indeed|linkedin|meteojob",
+    );
   }
 
   if (input === "json") {
@@ -135,6 +151,7 @@ function parseCliOptions(args: string[]): CliOptions {
       dryRun,
       limit,
       runActor,
+      location,
     };
   }
 
@@ -151,12 +168,21 @@ function parseCliOptions(args: string[]): CliOptions {
       dryRun,
       limit,
       runActor,
+      location,
     };
   }
 
   if (input === "apify-actor") {
-    if (!preset) {
-      throw new Error("Argument requis manquant : --preset=...");
+    if (!preset && !fromScenario) {
+      throw new Error(
+        "Argument requis manquant : --preset=... ou --from-scenario",
+      );
+    }
+
+    if (preset && fromScenario) {
+      throw new Error(
+        "Choisis soit --preset=..., soit --from-scenario, mais pas les deux.",
+      );
     }
 
     return {
@@ -164,9 +190,11 @@ function parseCliOptions(args: string[]): CliOptions {
       source,
       actor,
       preset,
+      fromScenario,
       dryRun,
       limit,
       runActor,
+      location,
     };
   }
 
@@ -187,13 +215,15 @@ function getRequiredEnv(name: string): string {
 function formatSourceLabel(options: CliOptions): string {
   const detail =
     options.input === "apify-actor"
-      ? options.preset
+      ? options.fromScenario
+        ? `scenario:${options.location ?? "default-location"}`
+        : options.preset
       : (options.actor ?? "unknown");
 
   return ["external", options.source, options.input, detail].join(":");
 }
 
-function createLoaderFromCliOptions(options: CliOptions) {
+async function createLoaderFromCliOptions(options: CliOptions) {
   switch (options.input) {
     case "json":
       return createExternalRawItemsLoader({
@@ -214,6 +244,56 @@ function createLoaderFromCliOptions(options: CliOptions) {
         throw new Error(
           "Le mode apify-actor lance réellement un Actor Apify. Ajoute --run-actor pour confirmer.",
         );
+      }
+
+      if (options.fromScenario) {
+        const activeSearchContext = await getActiveSearchContext();
+
+        if (!activeSearchContext) {
+          throw new Error(
+            "Aucun scénario de recherche actif trouvé. Vérifie qu'un SearchScenario isDefault=true et isActive=true existe en base.",
+          );
+        }
+
+        const criteria = mapSearchScenarioToJobSearchCriteria(
+          activeSearchContext.searchScenario,
+        );
+
+        const adapter = getApifyActorAdapter(options.source);
+
+        const runPlan = buildApifyActorRunPlan(adapter, criteria, {
+          locations: options.location ? [options.location] : undefined,
+          limit: options.limit,
+          maxLocations: 1,
+        });
+
+        const runPlanItem = runPlan[0];
+
+        if (!runPlanItem) {
+          throw new Error("Aucun run Apify généré depuis le scénario actif.");
+        }
+
+        console.log("");
+        console.log("Input Apify généré depuis le scénario actif");
+        console.log("------------------------------------------");
+        console.log(`Source : ${runPlanItem.source}`);
+        console.log(`Actor : ${options.actor ?? runPlanItem.actorId}`);
+        console.log(`Localisation : ${runPlanItem.location}`);
+        console.log(`Limite effective : ${runPlanItem.limit}`);
+        console.log(JSON.stringify(runPlanItem.input, null, 2));
+        console.log("");
+
+        return createExternalRawItemsLoader({
+          input: "apify-actor",
+          token: getRequiredEnv("APIFY_TOKEN"),
+          actorId: options.actor ?? runPlanItem.actorId,
+          actorInput: runPlanItem.input,
+          limit: runPlanItem.limit,
+        });
+      }
+
+      if (!options.preset) {
+        throw new Error("Argument requis manquant : --preset=...");
       }
 
       const preset = getApifyActorInputPreset(options.preset);
@@ -244,6 +324,16 @@ function createLoaderFromCliOptions(options: CliOptions) {
 
 function getDisplayActor(options: CliOptions): string {
   if (options.input === "apify-actor") {
+    if (options.fromScenario) {
+      const adapter = getApifyActorAdapter(options.source);
+
+      return options.actor ?? adapter.actorId;
+    }
+
+    if (!options.preset) {
+      return options.actor ?? "unknown";
+    }
+
     const preset = getApifyActorInputPreset(options.preset);
 
     return options.actor ?? preset.actorId;
@@ -255,7 +345,7 @@ function getDisplayActor(options: CliOptions): string {
 async function main() {
   const options = parseCliOptions(process.argv.slice(2));
 
-  const loader = createLoaderFromCliOptions(options);
+  const loader = await createLoaderFromCliOptions(options);
 
   const { items: rawItems, metadata } = await loader.loadItems();
 
@@ -286,7 +376,7 @@ async function main() {
   console.log(`Source: ${options.source}`);
   console.log(`Actor: ${getDisplayActor(options)}`);
   console.log(`Dry run: ${report.dryRun}`);
-  console.log(`Limit: ${options.limit ?? "none"}`);
+  console.log(`Requested limit: ${options.limit ?? "none"}`);
   console.log(`Run actor: ${options.runActor}`);
   console.log("");
   console.log(`Loader source: ${metadata.sourceLabel}`);
@@ -308,7 +398,9 @@ async function main() {
   console.log(`Scraping run id: ${report.scrapingRunId ?? "none"}`);
 
   if (options.input === "apify-actor") {
-    console.log(`Preset: ${options.preset}`);
+    console.log(`Preset: ${options.preset ?? "none"}`);
+    console.log(`From scenario: ${options.fromScenario}`);
+    console.log(`Location override: ${options.location ?? "none"}`);
   }
   if (mappingErrors.length > 0) {
     console.log("\nMapping errors:");
