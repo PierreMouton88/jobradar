@@ -15,6 +15,13 @@ const METEOJOB_ACTOR_ID = "stealth_mode/meteojob-jobs-search-scraper";
 const METEOJOB_MIN_LIMIT = 1;
 const METEOJOB_DEFAULT_LIMIT = 25;
 
+function buildIndeedSearchText(): string {
+  return "développeur web";
+}
+function buildLinkedinSearchText(): string {
+  return "développeur web";
+}
+
 export const indeedApifyActorAdapter: ApifyActorAdapter = {
   source: "indeed",
   actorId: "MXLpngmVpE8WTESQr",
@@ -25,7 +32,7 @@ export const indeedApifyActorAdapter: ApifyActorAdapter = {
   buildInput(criteria, options = {}) {
     const limit = getSafeLimit(options.limit, INDEED_DEFAULT_LIMIT);
     const location = options.location ?? getPrimaryLocation(criteria);
-    const query = buildCompactSearchText(criteria);
+    const query = buildIndeedSearchText();
 
     return {
       country: "fr",
@@ -95,7 +102,7 @@ export const linkedinApifyActorAdapter: ApifyActorAdapter = {
     );
 
     const location = options.location ?? getPrimaryLocation(criteria);
-    const jobTitle = buildCompactSearchText(criteria);
+    const jobTitle = buildLinkedinSearchText();
 
     return {
       easy_apply: false,

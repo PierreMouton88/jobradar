@@ -8,7 +8,6 @@ import {
   meteojobApifyActorAdapter,
 } from "./apify-actor-adapters";
 
-
 const criteria: JobSearchCriteria = {
   targetRoles: ["Développeur fullstack"],
   keywords: ["React", "TypeScript", "Node.js"],
@@ -31,7 +30,7 @@ describe("indeedApifyActorAdapter", () => {
       location: "Nancy",
       maxRows: 20,
       maxRowsPerUrl: 20,
-      query: "Développeur fullstack React TypeScript Node.js",
+      query: "développeur web",
       radius: "100",
       sort: "date",
     });
@@ -55,7 +54,7 @@ describe("linkedinApifyActorAdapter", () => {
 
     expect(input).toEqual({
       easy_apply: false,
-      job_title: "Développeur fullstack React TypeScript Node.js",
+      job_title: "développeur web",
       jobs_entries: 25,
       location: "Nancy",
       start_jobs: 25,
@@ -82,7 +81,7 @@ describe("apifyActorAdapters registry", () => {
   });
 
   it("liste les adapters disponibles", () => {
-  expect(listApifyActorAdapters()).toHaveLength(3);
+    expect(listApifyActorAdapters()).toHaveLength(3);
   });
 
   it("échoue explicitement pour une source inconnue", () => {
@@ -113,7 +112,7 @@ describe("meteojobApifyActorAdapter", () => {
       ignore_url_failures: true,
       max_items_per_url: 25,
       urls: [
-        "https://www.meteojob.com/jobs?what=D%C3%A9veloppeur+fullstack+React+TypeScript+Node.js&where=Grand+Est&sorting=DATE",
+        "https://www.meteojob.com/jobs?what=d%C3%A9veloppeur+web&where=Grand+Est&sorting=DATE",
       ],
     });
   });

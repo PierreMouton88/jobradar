@@ -10,7 +10,8 @@ const links = [
   { href: "/rag", label: "RAG" },
   { href: "/agent", label: "Agent" },
   { href: "/data-quality", label: "Qualité" },
-  { href: "/scraping-runs", label: "Imports" },
+  { href: "/scraping-runs", label: "Scraping Runs" },
+  { href: "/imports", label: "Imports" },
 ];
 
 export function Nav() {
@@ -20,7 +21,11 @@ export function Nav() {
   return (
     <header className="sticky top-0 z-20 border-b border-gray-800 bg-gray-950">
       <div className="mx-auto flex max-w-6xl items-center justify-between px-4 py-3">
-        <Link href="/" className="text-sm font-bold text-white" onClick={() => setOpen(false)}>
+        <Link
+          href="/"
+          className="text-sm font-bold text-white"
+          onClick={() => setOpen(false)}
+        >
           JobRadar IA
         </Link>
 
