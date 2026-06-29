@@ -15,7 +15,8 @@ L’objectif est de construire progressivement une application capable de :
 - utiliser un agent avec tools contrôlés ;
 - générer un rapport Markdown de veille ;
 - générer des inputs Apify dynamiques depuis les scénarios de recherche ;
-- préparer ensuite une UI de pilotage.
+- piloter des campagnes d’import Apify depuis l’interface `/imports` avec sélection des sources, localisations et localisations custom ;
+- afficher un rapport de campagne d’import directement dans l’UI.
 
 Le projet avance module par module afin de rester compréhensible, maintenable et explicable en entretien.
 
@@ -44,7 +45,8 @@ sources réalistes / exports externes / actors Apify
 → RAG générique profil + documents profil/CV + offres
 → inputs Apify dynamiques depuis SearchScenario
 → runs Apify contrôlés depuis CLI
-→ orchestration Apify depuis l’interface
+→ campagnes d’import Apify pilotées depuis l’interface `/imports`
+→ rapport de campagne affiché dans l’UI
 → distribution éventuelle du rapport
 ```
 
@@ -69,6 +71,11 @@ Le projet couvre actuellement :
 - génération dynamique d’inputs Apify depuis `SearchScenario` ;
 - adapters Apify pour Indeed, LinkedIn et Meteojob ;
 - mappers source-specific Indeed, LinkedIn et Meteojob ;
+- page `/imports` de pilotage des campagnes Apify ;
+- lancement réel d’une campagne d’import depuis l’UI avec confirmation ;
+- sélection des sources et localisations à lancer ;
+- ajout de localisations custom depuis l’UI ;
+- rapport de campagne d’import affiché dans l’interface ;
 - format pivot `ExternalJobOffer` ;
 - interface `/offers` adaptée à un vrai volume d’offres ;
 - pagination serveur, filtres, tri et responsive mobile-first ;
@@ -87,6 +94,7 @@ Le projet couvre actuellement :
 sources fictives / pages contrôlées
 ou exports JSON / datasets / actors Apify
 ou inputs Apify générés depuis le scénario actif
+ou campagne Apify lancée depuis `/imports`
 ↓
 mappers source-specific ou mapping externe
 ↓
@@ -224,6 +232,10 @@ jobradar-ia/
 │  │  └─ page.tsx
 │  ├─ rag/
 │  │  ├─ actions.ts
+│  │  └─ page.tsx
+│  ├─ imports/
+│  │  ├─ actions.ts
+│  │  ├─ ImportCampaignButton.tsx
 │  │  └─ page.tsx
 │  └─ agent/
 │     └─ page.tsx
@@ -1214,34 +1226,163 @@ Décisions importantes :
 - les différences entre actors sont isolées dans les adapters ;
 - les différences entre formats de sortie sont isolées dans les mappers ;
 - Meteojob utilise une requête plus large que Indeed/LinkedIn, car son moteur retourne mieux des résultats avec une recherche courte ;
+- les requêtes larges comme `développeur web` sont utiles pour obtenir du volume, mais elles peuvent produire du bruit ;
 - le préfiltre profil avant import n’est pas ajouté dans ce module.
 
 Limite volontaire :
 
-Le module 19 ne construit pas encore une UI de pilotage et ne lance pas automatiquement plusieurs localisations en un seul run. Le préfiltrage profil des offres externes avant import est reporté à une phase de polish, car Meteojob peut produire du bruit avec une requête large.
+Le module 19 ne construit pas encore l’UI de pilotage. Il prépare les adapters, les run plans et les commandes nécessaires. L’interface de pilotage est ensuite construite dans le module 20.
+
+---
+
+### Module 20 — V2 : interface de pilotage des imports Apify
+
+Statut : terminé.
+
+Objectif : transformer les scripts et previews Apify du module 19 en une interface utilisable depuis l’application.
+
+Avant le module 20 :
+
+```txt
+CLI external:import / apify:preview-inputs
+→ génération des inputs Apify
+→ lancement manuel via terminal
+→ lecture du résultat dans les logs
+```
+
+Après le module 20 :
+
+```txt
+/imports
+→ scénario actif affiché
+→ sources Apify supportées affichées
+→ plans de run Apify affichés
+→ inputs générés visibles
+→ commandes CLI rappelées
+→ bouton de campagne d’import
+→ modal de confirmation
+→ sélection des sources
+→ sélection des localisations
+→ ajout d’une localisation custom
+→ lancement côté serveur
+→ actors Apify
+→ datasets
+→ mappers source-specific
+→ import PostgreSQL réel
+→ rapport de campagne affiché dans l’UI
+```
+
+Éléments ajoutés :
+
+- page `/imports` ;
+- affichage du `SearchScenario` actif ;
+- affichage des adapters disponibles via `listApifyActorAdapters()` ;
+- view model des sources d’import ;
+- view model des plans de run Apify ;
+- affichage des inputs Apify générés ;
+- affichage des commandes CLI de preview et dry-run ;
+- fonction serveur `runApifyImportCampaign()` ;
+- Server Action `runImportCampaignAction()` ;
+- composant client `ImportCampaignButton` ;
+- modal de confirmation avant lancement ;
+- sélection des sources à lancer ;
+- sélection des localisations à lancer ;
+- ajout d’une localisation custom ;
+- import réel en base depuis l’UI ;
+- rapport de campagne avec durée, plans lancés, items bruts, offres mappées, uniques, créées, mises à jour, doublons ignorés et erreurs.
+
+Sources pilotables depuis l’UI :
+
+```txt
+indeed
+linkedin
+meteojob
+```
+
+Garde-fous conservés :
+
+- le token `APIFY_TOKEN` reste côté serveur ;
+- aucun token n’est exposé dans un composant client ;
+- le lancement depuis l’UI passe par une Server Action ;
+- l’utilisateur confirme la campagne dans une modal ;
+- les sources et localisations sont sélectionnables ;
+- les doublons sont gérés par le pipeline d’import existant ;
+- la CLI garde ses modes `--dry-run` et `--run-actor` pour tester les imports sans écriture DB.
+
+Validations réalisées :
+
+```txt
+Campagne Indeed seule
+→ 3 plans lancés
+→ 22 items bruts
+→ 0 erreur
+
+Campagne LinkedIn avec localisation custom "Metz, Grand Est"
+→ 1 plan lancé
+→ 18 items bruts
+→ 16 créations
+→ 2 mises à jour
+→ 0 erreur
+```
+
+Décisions importantes :
+
+- la page `/imports` n’est pas un espace admin, car l’application reste personnelle et sans authentification ;
+- l’UI lance de vrais imports, pas seulement des dry-runs ;
+- les dry-runs restent disponibles côté CLI pour tester une source ou un adapter ;
+- les localisations custom permettent de compenser les différences d’interprétation entre actors, par exemple `Metz` vs `Metz, Grand Est` pour LinkedIn ;
+- les requêtes larges comme `développeur web` augmentent le volume mais introduisent du bruit.
+
+Limite volontaire :
+
+Le module 20 ne fait pas encore de préfiltre profil avant import. Les offres peu pertinentes peuvent donc encore entrer en base. Ce sujet est reporté au module 21.
 
 ---
 
 ## Prochains modules
 
-### Module 20 — UI de pilotage
+### Module 21 — Pertinence des imports et préfiltre profil
 
 Statut : à venir.
 
-Objectif : rendre le projet démontrable et compréhensible pour un public non technique.
+Objectif : réduire le bruit produit par les imports larges, notamment avec les requêtes `développeur web`.
 
-À terme :
+Problème observé :
 
-- gestion des profils ;
-- gestion des scénarios ;
-- lancement de runs ;
-- lecture du rapport ;
-- actions recommandées ;
-- suivi coûts / runs / analyses.
+```txt
+requête large
+→ bon volume d’offres
+→ mais beaucoup d’offres peu pertinentes
+→ pollution progressive de la base
+```
+
+Piste de pipeline :
+
+```txt
+raw items Apify
+→ mapping ExternalJobOffer
+→ scoring heuristique rapide
+→ préfiltre optionnel selon un score minimal
+→ import PostgreSQL seulement pour les offres pertinentes
+```
+
+Fichiers utiles déjà identifiés :
+
+- `lib/scoring/score-job-offer.ts`
+- `lib/scoring/prioritize-job-offer.ts`
+- `lib/scoring/map-db-offer-to-scorable-offer.ts`
+
+À prévoir :
+
+- mapper `ExternalJobOffer → ScorableJobOffer` ;
+- option de campagne UI pour activer/désactiver le préfiltre ;
+- score minimal configurable ;
+- rapport UI indiquant combien d’offres ont été rejetées avant import ;
+- conservation éventuelle des offres rejetées dans un log ou un rapport, sans les insérer en base.
 
 ---
 
-### Module 21 — Distribution du rapport
+### Module 22 — Distribution du rapport
 
 Statut : à venir.
 
@@ -1273,6 +1414,7 @@ Aucune action sensible automatique.
 - `/data-quality` : qualité technique des données.
 - `/profile` : profil candidat actuel.
 - `/rag` : interface RAG profil-aware utilisant le profil candidat, les documents profil/CV Markdown et les offres indexées.
+- `/imports` : pilotage des campagnes Apify, sélection des sources/localisations, lancement côté serveur et rapport de campagne.
 - `/agent` : agent avec tools contrôlés.
 - `/fake-dynamic-jobs` : page locale de test Playwright.
 
@@ -1349,6 +1491,17 @@ Sources supportées à ce stade :
 indeed
 linkedin
 meteojob
+```
+
+Interface de pilotage :
+
+```txt
+/imports
+→ sélectionner les sources Apify
+→ sélectionner les localisations
+→ ajouter une localisation custom
+→ lancer une campagne d’import réelle après confirmation
+→ consulter le rapport de campagne dans l’UI
 ```
 
 ### IA
@@ -1453,7 +1606,10 @@ Le projet respecte plusieurs règles :
 - ne pas contourner de protections anti-bot ;
 - traiter Apify comme une source externe contrôlée, pas comme une autorisation automatique ;
 - prévisualiser les inputs Apify dynamiques avant lancement réel ;
-- garder `--run-actor` obligatoire pour tout lancement d’actor ;
+- garder `--run-actor` obligatoire pour tout lancement d’actor depuis la CLI ;
+- lancer les campagnes UI via une Server Action côté serveur ;
+- demander une confirmation UI avant lancement d’une campagne Apify ;
+- sélectionner explicitement les sources et localisations à lancer ;
 - distinguer limite demandée et limite effective imposée par un adapter ;
 - garder les futures actions d’agent sous contrôle humain ;
 - ne pas automatiser les candidatures.
@@ -1511,6 +1667,9 @@ git commit -m "feat(rag): index profile markdown documents"
 
 git add .
 git commit -m "feat(apify): generate actor inputs from search scenarios"
+
+git add .
+git commit -m "feat(imports): add Apify import campaign UI"
 ```
 
 ---
@@ -1536,6 +1695,9 @@ JobRadar IA permet d’expliquer :
 - comment générer des inputs Apify depuis un scénario de recherche ;
 - pourquoi utiliser des adapters par actor plutôt qu’un mapping universel ;
 - comment intégrer une nouvelle source comme Meteojob sans casser le pipeline existant ;
+- comment transformer des scripts d’import en interface de pilotage contrôlée ;
+- comment lancer une campagne Apify depuis une Server Action sans exposer le token ;
+- comment afficher un rapport d’exécution exploitable côté UI ;
 - comment générer un rapport opérationnel ;
 - comment prioriser des offres avec des règles déterministes ;
 - comment contrôler des appels IA batch avec dry-run, limite et flag explicite ;
@@ -1559,7 +1721,8 @@ Limites connues :
 - un actor Apify ne rend pas automatiquement une source juridiquement autorisée ;
 - les mappers doivent être maintenus source par source ;
 - les adapters Apify doivent aussi être maintenus source par source ;
-- Meteojob peut produire du bruit avec une requête large comme `développeur web` ;
+- les requêtes larges comme `développeur web` produisent du volume mais aussi beaucoup de bruit ;
+- LinkedIn peut interpréter certaines localisations différemment, par exemple `Metz` peut retourner 0 alors que `Metz, Grand Est` fonctionne ;
 - le préfiltre profil avant import n’est pas encore branché ;
 - le scoring côté UI dépend encore partiellement d’un profil TypeScript historique ;
 - les profils/scénarios sont en base, mais leur UI de gestion reste à construire ;
@@ -1570,8 +1733,10 @@ Limites connues :
 - il n’y a pas encore d’upload UI, de parsing PDF ou de gestion avancée des documents profil ;
 - l’ancien index `JobOfferEmbedding` existe encore comme héritage V1 et pourra être déprécié plus tard ;
 - l’indexation RAG des nouvelles offres doit encore être lancée manuellement après import ;
-- l’UI de pilotage V2 reste à construire ;
-- le lancement multi-localisations automatique reste à cadrer avec des limites explicites ;
+- l’UI de pilotage des imports existe, mais elle n’a pas encore d’historique persistant de campagnes ;
+- les localisations custom sont saisies manuellement et ne sont pas encore sauvegardées dans un scénario ;
+- les inputs custom par actor ne sont pas encore exposés dans l’UI ;
+- le lancement multi-localisations fonctionne, mais un mode asynchrone pourra être nécessaire en cas de déploiement avec timeouts ;
 - la distribution du rapport n’est pas encore faite.
 
 Ces limites sont volontaires : le projet avance module par module.
