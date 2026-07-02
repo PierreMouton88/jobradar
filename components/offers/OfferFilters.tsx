@@ -3,11 +3,24 @@
 import Link from "next/link";
 import { useState } from "react";
 
+type PriorityFilter =
+  | "very_promising"
+  | "interesting"
+  | "needs_ai_analysis"
+  | "watch"
+  | "low_priority"
+  | "probably_ignore";
+
 type OfferFiltersProps = {
   search?: string;
   remote?: "true" | "false";
   dateRange?: "1d" | "7d" | "14d" | "30d";
-  source?: "static-html" | "fake-dynamic-jobs" | "indeed" | "linkedin";
+  source?:
+    | "static-html"
+    | "fake-dynamic-jobs"
+    | "indeed"
+    | "linkedin"
+    | "meteojob";
   contractType?:
     | "CDI"
     | "CDD"
@@ -15,7 +28,8 @@ type OfferFiltersProps = {
     | "Alternance"
     | "Freelance"
     | "Inconnu";
-  sort?: "scrapedAt-desc" | "createdAt-desc";
+  sort?: "scrapedAt-desc" | "createdAt-desc" | "priority-desc";
+  priority?: PriorityFilter;
 };
 
 const inputClassName =
@@ -32,9 +46,11 @@ function countActiveFilters(
   dateRange?: string,
   source?: string,
   contractType?: string,
+  priority?: string,
 ): number {
-  return [search, remote, dateRange, source, contractType].filter(Boolean)
-    .length;
+  return [search, remote, dateRange, source, contractType, priority].filter(
+    Boolean,
+  ).length;
 }
 
 export function OfferFilters({
@@ -44,6 +60,7 @@ export function OfferFilters({
   source,
   contractType,
   sort,
+  priority,
 }: OfferFiltersProps) {
   const activeCount = countActiveFilters(
     search,
@@ -51,12 +68,13 @@ export function OfferFilters({
     dateRange,
     source,
     contractType,
+    priority,
   );
+
   const [open, setOpen] = useState(activeCount > 0);
 
   return (
     <section className="my-4 rounded-xl border border-gray-800 bg-gray-950 p-4 shadow-sm sm:my-6">
-      {/* Header — always visible */}
       <div className="flex items-center justify-between gap-2">
         <div className="flex items-center gap-2">
           <h2 className="font-semibold text-gray-50">Filtres</h2>
@@ -75,7 +93,6 @@ export function OfferFilters({
             Réinitialiser
           </Link>
 
-          {/* Toggle button — mobile only */}
           <button
             type="button"
             onClick={() => setOpen((v) => !v)}
@@ -84,7 +101,9 @@ export function OfferFilters({
           >
             {open ? "Masquer" : "Afficher"}
             <svg
-              className={`h-3.5 w-3.5 transition-transform duration-200 ${open ? "rotate-180" : ""}`}
+              className={`h-3.5 w-3.5 transition-transform duration-200 ${
+                open ? "rotate-180" : ""
+              }`}
               viewBox="0 0 12 12"
               fill="none"
               stroke="currentColor"
@@ -96,13 +115,16 @@ export function OfferFilters({
         </div>
       </div>
 
-      {/* Collapsible content — always visible on sm+, toggled on mobile */}
       <div className={open ? "block" : "hidden sm:block"}>
         <p className="mt-1 text-sm text-gray-500 sm:mt-0">
-          Recherche, source, contrat, télétravail et date d&apos;import.
+          Recherche, source, contrat, télétravail, date d&apos;import et tri.
         </p>
 
         <form action="/offers" method="GET" className="mt-4">
+          {priority ? (
+            <input type="hidden" name="priority" value={priority} />
+          ) : null}
+
           <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
             <div className="sm:col-span-2">
               <label htmlFor="search" className={labelClassName}>
@@ -131,6 +153,7 @@ export function OfferFilters({
                 <option value="">Toutes</option>
                 <option value="indeed">Indeed / Apify</option>
                 <option value="linkedin">LinkedIn / Apify</option>
+                <option value="meteojob">Meteojob / Apify</option>
                 <option value="static-html">Static HTML</option>
                 <option value="fake-dynamic-jobs">Fake dynamic jobs</option>
               </select>
@@ -202,15 +225,17 @@ export function OfferFilters({
               >
                 <option value="scrapedAt-desc">Import le plus récent</option>
                 <option value="createdAt-desc">Création la plus récente</option>
+                <option value="priority-desc">
+                  Priorité puis meilleur score
+                </option>
               </select>
             </div>
           </div>
 
           <div className="mt-5 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
             <p className="text-xs text-gray-500">
-              Le score affiché sur les offres correspond à la compatibilité avec
-              le profil. La qualité technique des données reste consultable dans
-              la page qualité.
+              Le score affiche la compatibilité avec le profil. La priorité
+              combine score, analyse IA et points de vigilance.
             </p>
 
             <div className="flex gap-2">

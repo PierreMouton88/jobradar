@@ -16,7 +16,10 @@ L’objectif est de construire progressivement une application capable de :
 - générer un rapport Markdown de veille ;
 - générer des inputs Apify dynamiques depuis les scénarios de recherche ;
 - piloter des campagnes d’import Apify depuis l’interface `/imports` avec sélection des sources, localisations et localisations custom ;
-- afficher un rapport de campagne d’import directement dans l’UI.
+- préfiltrer les imports Apify selon la pertinence profil avant insertion en base ;
+- nettoyer ponctuellement la base des offres peu pertinentes importées lors de tests ;
+- afficher un rapport de campagne d’import directement dans l’UI ;
+- afficher dans `/offers` un scoring et une priorité plus explicables, avec points positifs et points de vigilance.
 
 Le projet avance module par module afin de rester compréhensible, maintenable et explicable en entretien.
 
@@ -35,10 +38,12 @@ sources réalistes / exports externes / actors Apify
 → connecteurs et mappers
 → format pivot externe
 → nettoyage / normalisation / déduplication
-→ import PostgreSQL
+→ préfiltre de pertinence profil avant import
+→ import PostgreSQL des offres retenues
+→ nettoyage ponctuel des offres peu pertinentes déjà importées
 → navigation UI sur volume réel
-→ scoring profil
-→ priorisation heuristique
+→ scoring profil tolérant aux données incomplètes
+→ priorisation heuristique explicable
 → rapport Markdown de veille
 → profils candidat + scénarios de recherche
 → analyse IA contrôlée par limite et budget
@@ -47,6 +52,7 @@ sources réalistes / exports externes / actors Apify
 → runs Apify contrôlés depuis CLI
 → campagnes d’import Apify pilotées depuis l’interface `/imports`
 → rapport de campagne affiché dans l’UI
+→ filtrage et tri des offres par priorité dans `/offers`
 → distribution éventuelle du rapport
 ```
 
@@ -76,11 +82,17 @@ Le projet couvre actuellement :
 - sélection des sources et localisations à lancer ;
 - ajout de localisations custom depuis l’UI ;
 - rapport de campagne d’import affiché dans l’interface ;
+- préfiltre de pertinence profil avant import PostgreSQL ;
+- rapport UI des offres acceptées et rejetées par le préfiltre ;
+- script de nettoyage des offres peu pertinentes déjà présentes en base ;
 - format pivot `ExternalJobOffer` ;
 - interface `/offers` adaptée à un vrai volume d’offres ;
 - pagination serveur, filtres, tri et responsive mobile-first ;
+- affichage du score, de la priorité, de l’état d’analyse IA et des raisons de scoring dans les cartes d’offres ;
+- filtres rapides par priorité et tri par priorité puis score ;
 - rapport Markdown local de veille ;
 - profils candidat et scénarios de recherche stockés en base ;
+- scoring profil final plus tolérant aux informations manquantes, au senior et aux localisations hors préférences ;
 - priorisation heuristique des offres avec file de priorité ;
 - analyse IA contrôlée par CLI avec `--dry-run`, `--limit` et `--run` ;
 - tests unitaires avec Vitest ;
@@ -104,15 +116,17 @@ préparation / nettoyage / normalisation
 ↓
 déduplication
 ↓
-import PostgreSQL avec upsert par URL normalisée
+préfiltre profil de pertinence pour les imports Apify
+↓
+import PostgreSQL avec upsert par URL normalisée des offres retenues
 ↓
 ScrapingRun
 ↓
 affichage Next.js
 ↓
-scoring profil
+scoring profil tolérant aux données incomplètes
 ↓
-priorisation heuristique
+priorisation heuristique explicable
 ↓
 sélection des candidates IA
 ↓
@@ -152,7 +166,9 @@ L’objectif n’est pas seulement d’obtenir une application fonctionnelle, ma
 - comment intégrer Apify sans en faire une boîte noire incontrôlée ;
 - comment transformer un scénario de recherche métier en input technique propre à chaque actor ;
 - pourquoi isoler les différences de formats dans des adapters et des mappers ;
+- comment réduire le bruit des imports avec un préfiltre déterministe avant écriture en base ;
 - comment construire un rapport opérationnel de veille ;
+- comment rendre un scoring plus tolérant aux données manquantes sans perdre l’explicabilité ;
 - comment ajouter des garde-fous autour des appels IA ;
 - comment fonctionne un RAG avec embeddings, pgvector, contexte et sources ;
 - comment faire évoluer un RAG centré offres vers un index documentaire générique ;
@@ -210,6 +226,7 @@ L’objectif n’est pas seulement d’obtenir une application fonctionnelle, ma
 - TypeScript
 - ESLint
 - Script global `npm run check`
+- Scripts de nettoyage contrôlés avec dry-run par défaut
 
 ---
 
@@ -262,6 +279,7 @@ jobradar-ia/
 │  ├─ cli/
 │  │  └─ read-cli-question.ts
 │  ├─ imports/
+│  │  └─ external-offer-relevance-filter.ts
 │  ├─ offers/
 │  ├─ profile/
 │  ├─ rag/
@@ -307,6 +325,7 @@ jobradar-ia/
 │  ├─ preview-profile-documents.ts
 │  ├─ index-profile-documents.ts
 │  ├─ index-job-offers-rag-documents.ts
+│  ├─ cleanup-irrelevant-job-offers.ts
 │  ├─ check-rag-document-embeddings.ts
 │  ├─ test-rag-document-search.ts
 │  ├─ test-rag-document-answer.ts
@@ -508,9 +527,10 @@ Le scoring prend en compte notamment :
 - niveau d’expérience ;
 - red flags ;
 - signaux positifs ;
+- exigences explicites de diplôme ;
 - qualité des données.
 
-Le score est utilisé dans l’interface et dans le rapport Markdown.
+Le score est utilisé dans l’interface et dans le rapport Markdown. Il a été rendu plus tolérant au module 21 afin de ne pas pénaliser trop fortement les offres techniques incomplètes, senior ou non encore analysées par IA.
 
 ---
 
@@ -1335,52 +1355,294 @@ Décisions importantes :
 
 Limite volontaire :
 
-Le module 20 ne fait pas encore de préfiltre profil avant import. Les offres peu pertinentes peuvent donc encore entrer en base. Ce sujet est reporté au module 21.
+Le module 20 ne fait pas encore de préfiltre profil avant import. Les offres peu pertinentes peuvent donc encore entrer en base. Ce sujet est traité au module 21.
 
 ---
 
-## Prochains modules
 
-### Module 21 — Pertinence des imports et préfiltre profil
+### Module 21 — V2 : pertinence des imports et scoring final
 
-Statut : à venir.
+Statut : terminé.
 
-Objectif : réduire le bruit produit par les imports larges, notamment avec les requêtes `développeur web`.
+Objectif : réduire le bruit des imports larges et rendre le classement final des offres plus fiable, plus tolérant et plus explicable.
 
-Problème observé :
+Le module 21 regroupe deux volets complémentaires :
 
 ```txt
-requête large
-→ bon volume d’offres
-→ mais beaucoup d’offres peu pertinentes
-→ pollution progressive de la base
+21A — préfiltre de pertinence avant import
+21B — révision du scoring final et de la priorité UI
 ```
 
-Piste de pipeline :
+Problème observé avant le module :
+
+```txt
+requête large Apify, par exemple "développeur web"
+→ bon volume d’offres
+→ mais beaucoup d’offres hors métier
+→ pollution progressive de la base
+→ scoring final parfois trop sévère sur les offres techniques imparfaites
+```
+
+Décision de conception : le préfiltre et le scoring final n’ont pas le même rôle.
+
+```txt
+Préfiltre 21A
+= décider si une offre mérite d’entrer en base
+= strict sur le hors-métier évident
+= pas d’appel IA
+
+Scoring final 21B
+= classer les offres techniques restantes
+= tolérant sur les données manquantes, le senior, les localisations hors préférences
+= explicable dans l’UI
+```
+
+#### 21A — Préfiltre de pertinence avant import
+
+Pipeline mis en place :
 
 ```txt
 raw items Apify
 → mapping ExternalJobOffer
-→ scoring heuristique rapide
-→ préfiltre optionnel selon un score minimal
-→ import PostgreSQL seulement pour les offres pertinentes
+→ préparation / nettoyage / normalisation
+→ déduplication
+→ score de pertinence externe
+→ acceptation ou rejet
+→ import PostgreSQL uniquement des offres acceptées
 ```
 
-Fichiers utiles déjà identifiés :
+Éléments ajoutés :
 
-- `lib/scoring/score-job-offer.ts`
-- `lib/scoring/prioritize-job-offer.ts`
-- `lib/scoring/map-db-offer-to-scorable-offer.ts`
+- `lib/imports/external-offer-relevance-filter.ts` ;
+- score déterministe de pertinence sur 100 ;
+- seuil par défaut assoupli à 40 ;
+- fonction pure `scoreExternalOfferRelevance()` ;
+- fonction pure `filterExternalOffersByRelevance()` ;
+- raisons positives et négatives de scoring ;
+- comptage des principales raisons de rejet ;
+- intégration optionnelle dans `importExternalJobOffersToDb()` ;
+- activation du préfiltre dans les campagnes Apify UI ;
+- prise en compte des localisations sélectionnées dans le run, y compris localisations custom ;
+- affichage UI des offres acceptées et rejetées par le préfiltre ;
+- affichage des principales raisons de rejet dans le rapport de campagne `/imports` ;
+- tests unitaires Vitest du préfiltre.
 
-À prévoir :
+Philosophie du filtre :
 
-- mapper `ExternalJobOffer → ScorableJobOffer` ;
-- option de campagne UI pour activer/désactiver le préfiltre ;
-- score minimal configurable ;
-- rapport UI indiquant combien d’offres ont été rejetées avant import ;
-- conservation éventuelle des offres rejetées dans un log ou un rapport, sans les insérer en base.
+```txt
+Strict sur :
+- Business Developer
+- commercial / sales
+- franchise
+- conseiller patrimoine
+- marketing pur
+- enseignement / formation
+- legacy très éloigné sans signal web moderne
+
+Tolérant sur :
+- senior
+- lead
+- ingénieur
+- Bac+5
+- localisation hors préférences
+- ville custom choisie au moment du run
+- stack technique imparfaite mais exploitable
+```
+
+Exemples de comportements attendus :
+
+```txt
+Business Developer sédentaire
+→ rejet avant import
+
+Développeur Full-stack PHP / JavaScript
+→ accepté pour analyse ultérieure
+
+Développeur Front-End Senior React TypeScript
+→ accepté, senior traité comme vigilance
+
+Analyste Développeur COBOL AS400 sans signal web moderne
+→ rejet
+
+Développeur JavaScript à Troyes si Troyes est la localisation custom du run
+→ pas de pénalité de localisation
+```
+
+Le rapport de campagne affiche maintenant notamment :
+
+```txt
+Préparées
+Uniques
+Acceptées filtre
+Rejetées filtre
+Créées
+Mises à jour
+Principales raisons de rejet
+```
+
+#### Nettoyage ponctuel de la base
+
+Le module ajoute aussi un script de nettoyage hors UI pour retirer les offres peu pertinentes déjà entrées en base lors des tests précédents.
+
+Fichier ajouté :
+
+- `scripts/cleanup-irrelevant-job-offers.ts`
+
+Commande npm :
+
+```bash
+npm run db:cleanup:irrelevant-offers
+```
+
+Comportement :
+
+- dry-run par défaut ;
+- réutilise le même préfiltre que les imports ;
+- affiche les offres qui seraient supprimées ;
+- affiche les raisons principales ;
+- ne supprime rien sans `--apply` ;
+- cible par défaut les sources Apify ;
+- peut limiter le volume avec `--limit` ;
+- peut inspecter toutes les sources avec `--all-sources`.
+
+Commandes utiles :
+
+```bash
+npm run db:cleanup:irrelevant-offers
+npm run db:cleanup:irrelevant-offers -- --limit=50
+npm run db:cleanup:irrelevant-offers -- --min-score=40
+npm run db:cleanup:irrelevant-offers -- --apply --min-score=40
+npm run db:cleanup:irrelevant-offers -- --all-sources
+```
+
+#### 21B — Révision du scoring final et de la priorité
+
+Objectif : corriger un scoring trop punitif sur des offres pourtant intéressantes.
+
+Avant :
+
+```txt
+remote inconnu
++ salaire absent
++ analyse IA absente
++ niveau senior
++ localisation hors préférences
++ compétences détectées incomplètes
+→ score parfois trop bas
+```
+
+Après :
+
+```txt
+stack pertinente
++ titre développeur web / fullstack / frontend / backend
++ contrat compatible
++ signaux IA positifs
++ données exploitables
+→ score cohérent
+
+senior / Bac+5 / localisation faible / analyse IA absente
+→ points de vigilance
+→ pas rejet automatique
+```
+
+Éléments modifiés :
+
+- `lib/scoring/score-job-offer.ts` ;
+- `lib/scoring/prioritize-job-offer.ts` ;
+- `lib/offers/get-offers.ts` ;
+- `components/offers/OfferCard.tsx` ;
+- `components/offers/OfferFilters.tsx` ;
+- `app/offers/page.tsx`.
+
+Le scoring final prend maintenant en compte :
+
+- alignement du titre ;
+- compétences fortes et compétences en apprentissage ;
+- niveau d’expérience avec senior non bloquant ;
+- remote inconnu non bloquant ;
+- contrat inconnu non bloquant ;
+- localisation hors préférences faiblement pénalisée ;
+- signaux IA positifs ;
+- red flags IA ;
+- salaire mentionné avec impact faible ;
+- qualité des données ;
+- exigences explicites de diplôme ingénieur / Bac+5 comme vigilance.
+
+La priorisation a été revue :
+
+- une offre senior React / TypeScript n’est plus automatiquement ignorée ;
+- une offre sans analyse IA mais avec un score correct devient `needs_ai_analysis` ;
+- une offre avec red flags peut devenir `watch` ou `low_priority` selon le score ;
+- les offres clairement hors cible commerciale restent `probably_ignore` ;
+- le score global reste la base de la décision, enrichie par les raisons de priorité.
+
+Niveaux de priorité conservés :
+
+```txt
+very_promising
+interesting
+needs_ai_analysis
+watch
+low_priority
+probably_ignore
+```
+
+L’interface `/offers` affiche maintenant :
+
+- score de compatibilité ;
+- label du score ;
+- badge de priorité ;
+- badge `Analyse IA disponible` ou `Analyse IA absente` ;
+- points positifs ;
+- points de vigilance ;
+- filtre rapide par priorité ;
+- tri `Priorité puis meilleur score`.
+
+Exemples d’URL utiles :
+
+```txt
+/offers?sort=priority-desc
+/offers?priority=needs_ai_analysis
+/offers?priority=interesting
+/offers?priority=watch
+```
+
+Tests ajoutés ou mis à jour :
+
+- tests du préfiltre de pertinence externe ;
+- tests de priorisation ;
+- validation TypeScript avec `npm run check`.
+
+Commandes de validation :
+
+```bash
+npm run test -- external-offer-relevance-filter
+npm run test -- prioritize-job-offer
+npm run check
+```
+
+Décisions importantes :
+
+- pas de LLM dans le préfiltre ;
+- le préfiltre ne remplace pas le scoring final ;
+- le scoring final ne doit pas servir à décider brutalement de l’import ;
+- les informations manquantes doivent être traitées comme inconnues, pas comme négatives ;
+- les offres techniques imparfaites doivent entrer en base puis être classées ;
+- les offres manifestement hors métier doivent être écartées avant import ;
+- le nettoyage DB reste un script volontaire, jamais une action UI automatique.
+
+Limites volontaires :
+
+- les offres rejetées par le préfiltre ne sont pas persistées dans une table dédiée ;
+- le nettoyage DB ne nettoie pas encore automatiquement l’index RAG générique ;
+- le scoring `/offers` dépend encore du profil TypeScript historique côté UI ;
+- l’UI ne permet pas encore de régler le seuil du préfiltre ;
+- l’historique complet des campagnes d’import n’est pas encore persisté.
 
 ---
+
+## Prochains modules
 
 ### Module 22 — Distribution du rapport
 
@@ -1408,13 +1670,13 @@ Aucune action sensible automatique.
 
 ## Pages disponibles
 
-- `/offers` : liste des offres avec pagination, filtres et tri.
+- `/offers` : liste des offres avec pagination, filtres, tri, score, priorité, état d’analyse IA et raisons principales.
 - `/offers/[id]` : détail d’une offre, analyse IA, score, métadonnées.
 - `/scraping-runs` : historique des imports/runs.
 - `/data-quality` : qualité technique des données.
 - `/profile` : profil candidat actuel.
 - `/rag` : interface RAG profil-aware utilisant le profil candidat, les documents profil/CV Markdown et les offres indexées.
-- `/imports` : pilotage des campagnes Apify, sélection des sources/localisations, lancement côté serveur et rapport de campagne.
+- `/imports` : pilotage des campagnes Apify, sélection des sources/localisations, lancement côté serveur, préfiltre profil et rapport de campagne.
 - `/agent` : agent avec tools contrôlés.
 - `/fake-dynamic-jobs` : page locale de test Playwright.
 
@@ -1438,7 +1700,18 @@ docker compose up -d
 npm run db:generate
 npm run db:migrate
 npm run db:studio
+npm run db:cleanup:irrelevant-offers
 ```
+
+### Nettoyage ponctuel des offres peu pertinentes
+
+```bash
+npm run db:cleanup:irrelevant-offers
+npm run db:cleanup:irrelevant-offers -- --limit=50
+npm run db:cleanup:irrelevant-offers -- --apply --min-score=40
+```
+
+Par défaut, le script fonctionne en dry-run et ne supprime rien sans `--apply`.
 
 ### Scraping pédagogique
 
@@ -1501,6 +1774,7 @@ Interface de pilotage :
 → sélectionner les localisations
 → ajouter une localisation custom
 → lancer une campagne d’import réelle après confirmation
+→ appliquer le préfiltre profil avant insertion en base
 → consulter le rapport de campagne dans l’UI
 ```
 
@@ -1610,6 +1884,8 @@ Le projet respecte plusieurs règles :
 - lancer les campagnes UI via une Server Action côté serveur ;
 - demander une confirmation UI avant lancement d’une campagne Apify ;
 - sélectionner explicitement les sources et localisations à lancer ;
+- filtrer les offres hors métier avant import en base ;
+- garder le nettoyage des offres peu pertinentes en dry-run par défaut ;
 - distinguer limite demandée et limite effective imposée par un adapter ;
 - garder les futures actions d’agent sous contrôle humain ;
 - ne pas automatiser les candidatures.
@@ -1670,6 +1946,12 @@ git commit -m "feat(apify): generate actor inputs from search scenarios"
 
 git add .
 git commit -m "feat(imports): add Apify import campaign UI"
+
+git add .
+git commit -m "feat(imports): filter irrelevant offers before import"
+
+git add .
+git commit -m "feat(scoring): make offer scoring and priority more tolerant"
 ```
 
 ---
@@ -1698,6 +1980,9 @@ JobRadar IA permet d’expliquer :
 - comment transformer des scripts d’import en interface de pilotage contrôlée ;
 - comment lancer une campagne Apify depuis une Server Action sans exposer le token ;
 - comment afficher un rapport d’exécution exploitable côté UI ;
+- comment préfiltrer des imports bruités sans appel IA ;
+- comment distinguer préfiltre d’import, scoring final et priorisation ;
+- comment rendre un scoring explicable avec points positifs et points de vigilance ;
 - comment générer un rapport opérationnel ;
 - comment prioriser des offres avec des règles déterministes ;
 - comment contrôler des appels IA batch avec dry-run, limite et flag explicite ;
@@ -1721,9 +2006,8 @@ Limites connues :
 - un actor Apify ne rend pas automatiquement une source juridiquement autorisée ;
 - les mappers doivent être maintenus source par source ;
 - les adapters Apify doivent aussi être maintenus source par source ;
-- les requêtes larges comme `développeur web` produisent du volume mais aussi beaucoup de bruit ;
+- les requêtes larges comme `développeur web` produisent du volume mais aussi beaucoup de bruit, même si le préfiltre en réduit une partie ;
 - LinkedIn peut interpréter certaines localisations différemment, par exemple `Metz` peut retourner 0 alors que `Metz, Grand Est` fonctionne ;
-- le préfiltre profil avant import n’est pas encore branché ;
 - le scoring côté UI dépend encore partiellement d’un profil TypeScript historique ;
 - les profils/scénarios sont en base, mais leur UI de gestion reste à construire ;
 - l’analyse IA contrôlée existe en CLI, mais n’a pas encore d’interface dédiée ;
@@ -1733,10 +2017,12 @@ Limites connues :
 - il n’y a pas encore d’upload UI, de parsing PDF ou de gestion avancée des documents profil ;
 - l’ancien index `JobOfferEmbedding` existe encore comme héritage V1 et pourra être déprécié plus tard ;
 - l’indexation RAG des nouvelles offres doit encore être lancée manuellement après import ;
-- l’UI de pilotage des imports existe, mais elle n’a pas encore d’historique persistant de campagnes ;
+- l’UI de pilotage des imports existe avec rapport immédiat, mais elle n’a pas encore d’historique persistant de campagnes ;
 - les localisations custom sont saisies manuellement et ne sont pas encore sauvegardées dans un scénario ;
 - les inputs custom par actor ne sont pas encore exposés dans l’UI ;
 - le lancement multi-localisations fonctionne, mais un mode asynchrone pourra être nécessaire en cas de déploiement avec timeouts ;
+- les offres rejetées par le préfiltre ne sont pas encore persistées dans une table dédiée ;
+- le nettoyage DB des offres peu pertinentes ne nettoie pas encore automatiquement les documents RAG associés ;
 - la distribution du rapport n’est pas encore faite.
 
 Ces limites sont volontaires : le projet avance module par module.

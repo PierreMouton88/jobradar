@@ -138,8 +138,8 @@ export function ImportCampaignButton({
           </p>
 
           <p className="mt-1 text-sm text-gray-400">
-            Sources et localisations sélectionnables, limite de 10 résultats par
-            plan, import réel en base.
+            Sources et localisations sélectionnables, limite de 20 résultats par
+            plan, préfiltre profil actif avant import réel en base.
           </p>
         </div>
 
@@ -368,7 +368,20 @@ function ImportCampaignReportView({
       new Date(report.startedAt).getTime()) /
       1000,
   );
+  const relevanceReasonCounts = Array.from(
+    report.plans
+      .flatMap((plan) => plan.relevanceRejectionReasonCounts)
+      .reduce((counts, reasonCount) => {
+        counts.set(
+          reasonCount.reason,
+          (counts.get(reasonCount.reason) ?? 0) + reasonCount.count,
+        );
 
+        return counts;
+      }, new Map<string, number>()),
+  )
+    .map(([reason, count]) => ({ reason, count }))
+    .sort((a, b) => b.count - a.count);
   return (
     <div className="mt-6 space-y-4">
       <div className="flex items-center justify-between">
@@ -386,11 +399,23 @@ function ImportCampaignReportView({
         <p className="text-xs text-gray-500">{durationInSeconds}s</p>
       </div>
 
-      <div className="grid grid-cols-2 gap-3 rounded-lg border border-gray-700 bg-gray-800 p-4 md:grid-cols-4">
+      <div className="grid grid-cols-2 gap-3 rounded-lg border border-gray-700 bg-gray-800 p-4 md:grid-cols-5">
         <ReportStat label="Plans lancés" value={report.plansCount} />
         <ReportStat label="Items bruts" value={report.totalRawItems} />
         <ReportStat label="Offres mappées" value={report.totalMappedOffers} />
+        <ReportStat label="Préparées" value={report.totalPreparedOffers} />
         <ReportStat label="Uniques" value={report.totalUniqueOffers} />
+
+        <ReportStat
+          label="Acceptées filtre"
+          value={report.totalAcceptedByRelevance}
+          variant="success"
+        />
+        <ReportStat
+          label="Rejetées filtre"
+          value={report.totalRejectedByRelevance}
+          variant="warning"
+        />
         <ReportStat
           label="Créées"
           value={report.totalCreated}
@@ -411,7 +436,52 @@ function ImportCampaignReportView({
           variant={report.totalErrors > 0 ? "danger" : "default"}
         />
       </div>
+      {report.totalRejectedByRelevance > 0 ? (
+        <div className="rounded-lg border border-amber-800 bg-amber-900/20 p-4">
+          <div className="flex flex-col gap-1 md:flex-row md:items-center md:justify-between">
+            <div>
+              <h4 className="text-sm font-semibold text-amber-200">
+                Préfiltre de pertinence actif
+              </h4>
+              <p className="mt-1 text-sm text-amber-100/80">
+                {report.totalRejectedByRelevance} offre
+                {report.totalRejectedByRelevance > 1 ? "s" : ""} rejetée
+                {report.totalRejectedByRelevance > 1 ? "s" : ""} avant import en
+                base.
+              </p>
+            </div>
 
+            <p className="text-xs text-amber-200/70">
+              Seuil :{" "}
+              {report.plans.find(
+                (plan) => plan.relevanceFilterMinScore !== null,
+              )?.relevanceFilterMinScore ?? "non renseigné"}
+            </p>
+          </div>
+
+          {relevanceReasonCounts.length > 0 ? (
+            <div className="mt-3">
+              <p className="text-xs font-medium uppercase tracking-wide text-amber-200/70">
+                Principales raisons
+              </p>
+
+              <ul className="mt-2 space-y-1 text-sm text-amber-100/90">
+                {relevanceReasonCounts.slice(0, 5).map((reasonCount) => (
+                  <li
+                    key={reasonCount.reason}
+                    className="flex items-center justify-between gap-3"
+                  >
+                    <span>{reasonCount.reason}</span>
+                    <span className="rounded-full bg-amber-950/60 px-2 py-0.5 text-xs font-medium text-amber-200">
+                      {reasonCount.count}
+                    </span>
+                  </li>
+                ))}
+              </ul>
+            </div>
+          ) : null}
+        </div>
+      ) : null}
       <div className="grid gap-3">
         {report.plans.map((plan) => (
           <article
@@ -443,9 +513,20 @@ function ImportCampaignReportView({
               </div>
             </div>
 
-            <div className="mt-3 grid grid-cols-4 gap-3">
+            <div className="mt-3 grid grid-cols-2 gap-3 md:grid-cols-4">
               <ReportStat label="Raw" value={plan.rawItems} />
               <ReportStat label="Mappées" value={plan.mappedOffers} />
+              <ReportStat label="Uniques" value={plan.uniqueOffers} />
+              <ReportStat
+                label="Acceptées filtre"
+                value={plan.acceptedByRelevance}
+                variant="success"
+              />
+              <ReportStat
+                label="Rejetées filtre"
+                value={plan.rejectedByRelevance}
+                variant="warning"
+              />
               <ReportStat
                 label="Créées"
                 value={plan.created}
@@ -457,7 +538,30 @@ function ImportCampaignReportView({
                 variant="info"
               />
             </div>
+            {plan.rejectedByRelevance > 0 &&
+            plan.relevanceRejectionReasonCounts.length > 0 ? (
+              <div className="mt-3 rounded-md border border-amber-800 bg-amber-900/20 p-3 text-sm text-amber-100/90">
+                <p className="font-medium text-amber-200">
+                  Rejets par pertinence
+                </p>
 
+                <ul className="mt-1.5 space-y-1">
+                  {plan.relevanceRejectionReasonCounts
+                    .slice(0, 3)
+                    .map((reasonCount) => (
+                      <li
+                        key={`${plan.source}-${plan.location}-${reasonCount.reason}`}
+                        className="flex items-center justify-between gap-3"
+                      >
+                        <span>{reasonCount.reason}</span>
+                        <span className="rounded-full bg-amber-950/60 px-2 py-0.5 text-xs font-medium text-amber-200">
+                          {reasonCount.count}
+                        </span>
+                      </li>
+                    ))}
+                </ul>
+              </div>
+            ) : null}
             {plan.errors.length > 0 ? (
               <div className="mt-3 rounded-md border border-red-800 bg-red-900/30 p-3 text-sm text-red-300">
                 <p className="font-medium">Erreurs</p>
@@ -484,12 +588,13 @@ function ReportStat({
 }: {
   label: string;
   value: number;
-  variant?: "default" | "success" | "info" | "danger";
+  variant?: "default" | "success" | "info" | "danger" | "warning";
 }) {
   const valueClass = {
     default: "text-gray-100",
     success: "text-green-400",
     info: "text-blue-400",
+    warning: "text-amber-400",
     danger: value > 0 ? "text-red-400" : "text-gray-100",
   }[variant];
 

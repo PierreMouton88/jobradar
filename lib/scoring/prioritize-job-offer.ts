@@ -24,27 +24,149 @@ export type PrioritizedOffer = {
   reasons: PriorityReason[];
 };
 
-function hasOutOfTargetTitle(title: string | undefined): boolean {
-  if (!title) {
-    return false;
-  }
+function normalizeText(value: string): string {
+  return value
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .toLowerCase()
+    .replace(/\s+/g, " ")
+    .trim();
+}
 
-  const normalizedTitle = title.toLowerCase();
+function containsAny(text: string, keywords: string[]): boolean {
+  const normalizedText = normalizeText(text);
 
-  const outOfTargetKeywords = [
+  return keywords.some((keyword) =>
+    normalizedText.includes(normalizeText(keyword)),
+  );
+}
+
+function buildSearchableText(offer: ScorableJobOffer): string {
+  return [
+    offer.title ?? "",
+    offer.description ?? "",
+    offer.location,
+    offer.contractType,
+    ...offer.skills,
+    ...(offer.analysis?.positiveSignals ?? []),
+    ...(offer.analysis?.redFlags ?? []),
+  ].join(" ");
+}
+
+function hasOutOfTargetTitle(offer: ScorableJobOffer): boolean {
+  const title = offer.title ?? "";
+  const searchableText = buildSearchableText(offer);
+
+  const outOfTargetTitleKeywords = [
     "business developer",
-    "business développeur",
+    "business developpeur",
+    "business development",
+    "developpeur commercial",
     "commercial",
     "sales",
     "account manager",
-    "chargé d'affaires",
     "charge d'affaires",
-    "business development",
+    "charge de developpement",
+    "charge du developpement",
+    "ingenieur commercial",
+    "franchise",
+    "animateur de reseau",
+    "conseiller en gestion de patrimoine",
   ];
 
-  return outOfTargetKeywords.some((keyword) =>
-    normalizedTitle.includes(keyword),
+  const devStackKeywords = [
+    "react",
+    "typescript",
+    "javascript",
+    "node",
+    "nestjs",
+    "next",
+    "frontend",
+    "front-end",
+    "backend",
+    "back-end",
+    "fullstack",
+    "full stack",
+    "api",
+    "rest",
+  ];
+
+  return (
+    containsAny(title, outOfTargetTitleKeywords) &&
+    !containsAny(searchableText, devStackKeywords)
   );
+}
+
+function hasStrongDevSignal(offer: ScorableJobOffer): boolean {
+  const searchableText = buildSearchableText(offer);
+
+  return containsAny(searchableText, [
+    "react",
+    "typescript",
+    "javascript",
+    "node",
+    "nestjs",
+    "next.js",
+    "nextjs",
+    "frontend",
+    "front-end",
+    "backend",
+    "back-end",
+    "fullstack",
+    "full stack",
+    "api rest",
+    "developpeur web",
+    "software engineer",
+  ]);
+}
+
+function hasExplicitEngineerRequirement(offer: ScorableJobOffer): boolean {
+  const searchableText = buildSearchableText(offer);
+
+  return containsAny(searchableText, [
+    "ecole d'ingenieur",
+    "diplome d'ingenieur",
+    "formation ingenieur",
+    "bac+5 obligatoire",
+    "bac +5 obligatoire",
+    "master 2 obligatoire",
+    "diplome bac+5",
+    "diplome bac +5",
+  ]);
+}
+
+function addScoreReason(score: JobOfferScore, reasons: PriorityReason[]) {
+  if (score.percentage >= 85) {
+    reasons.push({
+      type: "positive",
+      label: "Score de compatibilité excellent",
+    });
+
+    return;
+  }
+
+  if (score.percentage >= 70) {
+    reasons.push({
+      type: "positive",
+      label: "Score de compatibilité intéressant",
+    });
+
+    return;
+  }
+
+  if (score.percentage >= 50) {
+    reasons.push({
+      type: "action",
+      label: "Compatibilité moyenne : offre à examiner sans priorité forte",
+    });
+
+    return;
+  }
+
+  reasons.push({
+    type: "negative",
+    label: "Score de compatibilité faible",
+  });
 }
 
 export function prioritizeJobOffer(
@@ -55,51 +177,71 @@ export function prioritizeJobOffer(
 
   const hasAnalysis = Boolean(offer.analysis);
   const hasSeniorLevel = offer.analysis?.experienceLevel === "senior";
+  const hasMidLevel = offer.analysis?.experienceLevel === "mid";
   const hasManyRedFlags = (offer.analysis?.redFlags.length ?? 0) >= 3;
+  const hasSomeRedFlags = (offer.analysis?.redFlags.length ?? 0) > 0;
   const hasLowQuality =
     offer.qualityScore !== undefined && offer.qualityScore < 50;
-  const hasTitleOutOfTarget = hasOutOfTargetTitle(offer.title);
+  const titleOutOfTarget = hasOutOfTargetTitle(offer);
+  const strongDevSignal = hasStrongDevSignal(offer);
+  const explicitEngineerRequirement = hasExplicitEngineerRequirement(offer);
+
+  if (titleOutOfTarget) {
+    reasons.push({
+      type: "negative",
+      label:
+        "Titre probablement hors cible développeur logiciel, sans signal technique compensatoire",
+    });
+
+    return {
+      priority: "probably_ignore",
+      label: "À ignorer probablement",
+      reasons,
+    };
+  }
+
+  addScoreReason(score, reasons);
+
   if (hasSeniorLevel) {
     reasons.push({
       type: "negative",
-      label: "Poste senior probablement peu adapté au profil actuel",
+      label:
+        "Poste senior détecté : à examiner, mais pas ignoré automatiquement",
     });
-
-    return {
-      priority: "probably_ignore",
-      label: "À ignorer probablement",
-      reasons,
-    };
   }
 
-  if (hasManyRedFlags) {
+  if (hasMidLevel) {
     reasons.push({
       type: "negative",
-      label: "Plusieurs points de vigilance détectés par l’analyse IA",
+      label: "Poste mid détecté : potentiellement exigeant mais jouable",
     });
-
-    return {
-      priority: "low_priority",
-      label: "Peu prioritaire",
-      reasons,
-    };
   }
-  if (hasTitleOutOfTarget) {
+
+  if (explicitEngineerRequirement) {
     reasons.push({
       type: "negative",
-      label: "Titre d’offre probablement hors cible développeur",
+      label: "Exigence diplôme ingénieur / Bac+5 détectée",
     });
-
-    return {
-      priority: "probably_ignore",
-      label: "À ignorer probablement",
-      reasons,
-    };
   }
+
+  if (hasSomeRedFlags) {
+    reasons.push({
+      type: "negative",
+      label: "Point(s) de vigilance détecté(s) par l’analyse IA",
+    });
+  }
+
+  if (hasLowQuality) {
+    reasons.push({
+      type: "negative",
+      label: "Données de faible qualité : vérifier l’offre avant décision",
+    });
+  }
+
   if (!hasAnalysis && score.percentage >= 50) {
     reasons.push({
       type: "action",
-      label: "Score correct mais analyse IA absente : à analyser en priorité",
+      label: "Analyse IA absente : à analyser avant décision finale",
     });
 
     return {
@@ -109,39 +251,15 @@ export function prioritizeJobOffer(
     };
   }
 
-  if (score.percentage >= 80 && !hasLowQuality) {
-    reasons.push({
-      type: "positive",
-      label: "Score de compatibilité élevé",
-    });
-
+  if (hasManyRedFlags && score.percentage < 70) {
     return {
-      priority: "very_promising",
-      label: "Très prometteuse",
+      priority: "low_priority",
+      label: "Peu prioritaire",
       reasons,
     };
   }
 
-  if (score.percentage >= 65) {
-    reasons.push({
-      type: "positive",
-      label: "Score de compatibilité intéressant",
-    });
-
-    return {
-      priority: "interesting",
-      label: "Intéressante",
-      reasons,
-    };
-  }
-
-  if (score.percentage >= 45) {
-    reasons.push({
-      type: "action",
-      label:
-        "Compatibilité moyenne : offre à surveiller sans priorité immédiate",
-    });
-
+  if (hasManyRedFlags && score.percentage >= 70) {
     return {
       priority: "watch",
       label: "À surveiller",
@@ -149,10 +267,29 @@ export function prioritizeJobOffer(
     };
   }
 
-  reasons.push({
-    type: "negative",
-    label: "Score de compatibilité faible",
-  });
+  if (score.percentage >= 85 && !hasLowQuality) {
+    return {
+      priority: "very_promising",
+      label: "Très prometteuse",
+      reasons,
+    };
+  }
+
+  if (score.percentage >= 70) {
+    return {
+      priority: "interesting",
+      label: "Intéressante",
+      reasons,
+    };
+  }
+
+  if (score.percentage >= 50) {
+    return {
+      priority: strongDevSignal ? "watch" : "low_priority",
+      label: strongDevSignal ? "À surveiller" : "Peu prioritaire",
+      reasons,
+    };
+  }
 
   return {
     priority: "low_priority",

@@ -45,6 +45,7 @@ export function mapDbOfferToScorableOffer(
 ): ScorableJobOffer {
   return {
     title: offer.title,
+    description: offer.description,
     skills: offer.skills,
     contractType: mapContractTypeFromDb(offer.contractType),
     location: offer.location,

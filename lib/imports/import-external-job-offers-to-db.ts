@@ -1,14 +1,27 @@
 import { prisma } from "@/lib/prisma";
+import type { CandidateProfile } from "@/lib/profile/candidate-profile";
 import type { ExternalJobOffer } from "@/types/external-job-offer";
 import {
   prepareExternalOfferForDb,
   previewExternalJobOffersImport,
 } from "../offers/import-external-job-offers";
+import {
+  filterExternalOffersByRelevance,
+  type ExternalOfferRelevanceReasonCount,
+} from "./external-offer-relevance-filter";
+
+export type ImportExternalJobOffersRelevanceFilterOptions = {
+  enabled: boolean;
+  minScore?: number;
+  profile: CandidateProfile;
+  searchLocations?: string[];
+};
 
 export type ImportExternalJobOffersToDbOptions = {
   externalOffers: ExternalJobOffer[];
   sourceLabel: string;
   dryRun?: boolean;
+  relevanceFilter?: ImportExternalJobOffersRelevanceFilterOptions;
 };
 
 export type ImportExternalJobOffersToDbReport = {
@@ -17,6 +30,13 @@ export type ImportExternalJobOffersToDbReport = {
   uniqueOffers: number;
   duplicatesSkipped: number;
   previewErrors: number;
+
+  relevanceFilterEnabled: boolean;
+  relevanceFilterMinScore: number | null;
+  acceptedByRelevance: number;
+  rejectedByRelevance: number;
+  relevanceRejectionReasonCounts: ExternalOfferRelevanceReasonCount[];
+
   created: number;
   updated: number;
   errors: string[];
@@ -31,12 +51,34 @@ export async function importExternalJobOffersToDb(
 
   const preview = previewExternalJobOffersImport(options.externalOffers);
 
+  const relevanceFilter = options.relevanceFilter;
+  const relevanceFilterEnabled = relevanceFilter?.enabled ?? false;
+
+  const relevanceFilterResult =
+    relevanceFilterEnabled && relevanceFilter
+      ? filterExternalOffersByRelevance({
+          offers: preview.uniqueOffers,
+          profile: relevanceFilter.profile,
+          minScore: relevanceFilter.minScore,
+          searchLocations: relevanceFilter.searchLocations,
+        })
+      : null;
+  const offersToImport =
+    relevanceFilterResult?.acceptedOffers ?? preview.uniqueOffers;
+
   const report: ImportExternalJobOffersToDbReport = {
     totalExternalOffers: preview.totalOffers,
     preparedOffers: preview.preparedOffers.length,
     uniqueOffers: preview.uniqueOffers.length,
     duplicatesSkipped: preview.duplicates.length,
     previewErrors: preview.errors.length,
+
+    relevanceFilterEnabled,
+    relevanceFilterMinScore: relevanceFilterResult?.minScore ?? null,
+    acceptedByRelevance: offersToImport.length,
+    rejectedByRelevance: relevanceFilterResult?.rejectedOffers.length ?? 0,
+    relevanceRejectionReasonCounts: relevanceFilterResult?.reasonCounts ?? [],
+
     created: 0,
     updated: 0,
     errors: preview.errors.map(
@@ -64,7 +106,7 @@ export async function importExternalJobOffersToDb(
 
   report.scrapingRunId = scrapingRun.id;
 
-  for (const offer of preview.uniqueOffers) {
+  for (const offer of offersToImport) {
     try {
       const dbOffer = prepareExternalOfferForDb(offer);
 
@@ -102,6 +144,7 @@ export async function importExternalJobOffersToDb(
       );
     }
   }
+
   const importedOffersCount = report.created + report.updated;
 
   const finalStatus =
@@ -110,6 +153,7 @@ export async function importExternalJobOffersToDb(
       : importedOffersCount > 0
         ? "PARTIAL"
         : "FAILED";
+
   await prisma.scrapingRun.update({
     where: {
       id: scrapingRun.id,

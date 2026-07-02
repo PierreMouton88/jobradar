@@ -39,6 +39,7 @@
     "report:generate": "tsx scripts/generate-jobradar-report.ts",
     "ai:analyze-candidates": "tsx scripts/analyze-ai-candidates.ts",
     "apify:preview-inputs": "tsx scripts/preview-apify-actor-inputs.ts",
+    "db:cleanup:irrelevant-offers": "tsx scripts/cleanup-irrelevant-job-offers.ts",
     "db:seed:candidate-context": "tsx prisma/seed-candidate-context.ts",
     "dev:rag:test-document": "tsx scripts/test-rag-document.ts",
     "dev:rag:test-db-documents": "tsx scripts/test-rag-documents-from-db.ts",

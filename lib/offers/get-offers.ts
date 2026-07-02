@@ -4,14 +4,22 @@ import type { JobOffer } from "@/types/job-offer";
 import { mapContractTypeFromDb } from "@/lib/offers/offer-normalization";
 import { candidateProfile } from "@/lib/profile/candidate-profile";
 import { scoreJobOffer } from "@/lib/scoring/score-job-offer";
-import { prioritizeJobOffer } from "@/lib/scoring/prioritize-job-offer";
+import {
+  prioritizeJobOffer,
+  type OfferPriorityLevel,
+} from "@/lib/scoring/prioritize-job-offer";
 
 const DEFAULT_PAGE = 1;
 const DEFAULT_PAGE_SIZE = 10;
 const MAX_PAGE_SIZE = 50;
 
 type DateRangeFilter = "1d" | "7d" | "14d" | "30d";
-type SourceFilter = "static-html" | "fake-dynamic-jobs" | "indeed" | "linkedin";
+type SourceFilter =
+  | "static-html"
+  | "fake-dynamic-jobs"
+  | "indeed"
+  | "linkedin"
+  | "meteojob";
 type RemoteFilter = "true" | "false";
 
 type ContractTypeFilter =
@@ -22,7 +30,8 @@ type ContractTypeFilter =
   | "Freelance"
   | "Inconnu";
 
-type SortFilter = "scrapedAt-desc" | "createdAt-desc";
+type SortFilter = "scrapedAt-desc" | "createdAt-desc" | "priority-desc";
+type PriorityFilter = OfferPriorityLevel;
 
 export type GetOffersParams = {
   page?: number;
@@ -33,6 +42,7 @@ export type GetOffersParams = {
   source?: SourceFilter;
   contractType?: ContractTypeFilter;
   sort?: SortFilter;
+  priority?: PriorityFilter;
 };
 
 export type GetOffersResult = {
@@ -111,12 +121,72 @@ function getOrderBy(
         createdAt: "desc",
       };
 
+    case "priority-desc":
+      return {
+        scrapedAt: "desc",
+      };
+
     case "scrapedAt-desc":
     default:
       return {
         scrapedAt: "desc",
       };
   }
+}
+
+function getPriorityRank(priority: OfferPriorityLevel): number {
+  const ranks: Record<OfferPriorityLevel, number> = {
+    very_promising: 1,
+    interesting: 2,
+    needs_ai_analysis: 3,
+    watch: 4,
+    low_priority: 5,
+    probably_ignore: 6,
+  };
+
+  return ranks[priority];
+}
+
+function getOfferScorePercentage(offer: JobOffer): number {
+  return offer.score?.percentage ?? 0;
+}
+
+function sortOffersForUi(
+  offers: JobOffer[],
+  sort: SortFilter | undefined,
+): JobOffer[] {
+  if (sort !== "priority-desc") {
+    return offers;
+  }
+
+  return [...offers].sort((a, b) => {
+    const priorityDiff =
+      getPriorityRank(a.priority.priority) -
+      getPriorityRank(b.priority.priority);
+    
+    if (priorityDiff !== 0) {
+      return priorityDiff;
+    }
+
+const scoreDiff = getOfferScorePercentage(b) - getOfferScorePercentage(a);
+
+    if (scoreDiff !== 0) {
+      return scoreDiff;
+    }
+
+    return new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime();
+  });
+}
+
+function filterOffersByPriority(
+  offers: JobOffer[],
+  priority: PriorityFilter | undefined,
+): JobOffer[] {
+  if (!priority) {
+    return offers;
+  }
+
+  return offers.filter((offer) => offer.priority.priority === priority);
 }
 
 function mapDbOfferToJobOffer(
@@ -148,13 +218,14 @@ function mapDbOfferToJobOffer(
     : null;
 
   const scorableOffer = {
-  title: offer.title,
-  skills: offer.skills,
-  contractType,
-  location: offer.location,
-  qualityScore: offer.qualityScore,
-  analysis: analysisForScore,
-};
+    title: offer.title,
+    description: offer.description,
+    skills: offer.skills,
+    contractType,
+    location: offer.location,
+    qualityScore: offer.qualityScore,
+    analysis: analysisForScore,
+  };
 
   const score = scoreJobOffer(scorableOffer, candidateProfile);
   const priority = prioritizeJobOffer(scorableOffer, score);
@@ -222,7 +293,9 @@ export async function getOffers(
     ...(params.source
       ? {
           source:
-            params.source === "indeed" || params.source === "linkedin"
+            params.source === "indeed" ||
+            params.source === "linkedin" ||
+            params.source === "meteojob"
               ? {
                   contains: `apify:${params.source}:`,
                   mode: "insensitive",
@@ -268,6 +341,34 @@ export async function getOffers(
         }
       : {}),
   };
+
+  const shouldUseComputedPagination =
+    Boolean(params.priority) || params.sort === "priority-desc";
+
+  if (shouldUseComputedPagination) {
+    const offers = await prisma.jobOffer.findMany({
+      where,
+      orderBy: getOrderBy(params.sort),
+      include: {
+        analysis: true,
+      },
+    });
+
+    const mappedOffers = offers.map(mapDbOfferToJobOffer);
+    const filteredOffers = filterOffersByPriority(mappedOffers, params.priority);
+    const sortedOffers = sortOffersForUi(filteredOffers, params.sort);
+    const paginatedOffers = sortedOffers.slice(skip, skip + pageSize);
+
+    return {
+      offers: paginatedOffers,
+      pagination: {
+        page,
+        pageSize,
+        totalOffers: filteredOffers.length,
+        totalPages: Math.max(1, Math.ceil(filteredOffers.length / pageSize)),
+      },
+    };
+  }
 
   const [offers, totalOffers] = await Promise.all([
     prisma.jobOffer.findMany({

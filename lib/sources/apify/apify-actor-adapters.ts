@@ -4,7 +4,6 @@ import {
   getPrimaryLocation,
   getSafeLimit,
 } from "@/lib/sources/apify/apify-actor-adapter";
-import { buildCompactSearchText } from "@/lib/search/job-search-criteria";
 
 const INDEED_MIN_LIMIT = 1;
 const INDEED_DEFAULT_LIMIT = 20;

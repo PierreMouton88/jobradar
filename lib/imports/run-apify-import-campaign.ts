@@ -1,12 +1,10 @@
 import "server-only";
 
-import { prisma } from "@/lib/prisma";
 import type { JobSearchCriteria } from "@/lib/search/job-search-criteria";
 import type { SupportedApifyActorSource } from "@/lib/sources/apify/apify-actor-adapter";
 import { listApifyActorAdapters } from "@/lib/sources/apify/apify-actor-adapters";
 import { buildApifyActorRunPlan } from "@/lib/sources/apify/apify-actor-run-plan";
 import { ApifyActorRunExternalRawItemsLoader } from "@/lib/sources/apify/apify-actor-run-external-raw-items-loader";
-
 
 import type { ExternalJobOffer } from "@/types/external-job-offer";
 import type { IndeedApifyOffer } from "@/types/sources/indeed-apify";
@@ -16,6 +14,8 @@ import { mapIndeedApifyOffer } from "../sources/apify/indeed/map-indeed-apify-of
 import { mapLinkedinApifyOffer } from "../sources/apify/linkedin/map-linkedin-apify-offer";
 import { mapMeteojobApifyOffer } from "../sources/apify/meteojob/map-meteojob-apify-offer";
 import { importExternalJobOffersToDb } from "./import-external-job-offers-to-db";
+import { mapCandidateProfileToScoringProfile } from "../search-context/map-candidate-profile-to-scoring-profile";
+import { getActiveSearchContext } from "../search-context/get-active-search-context";
 
 export type ApifyImportCampaignPlanReport = {
   source: string;
@@ -29,6 +29,16 @@ export type ApifyImportCampaignPlanReport = {
   uniqueOffers: number;
   duplicatesSkipped: number;
   previewErrors: number;
+
+  relevanceFilterEnabled: boolean;
+  relevanceFilterMinScore: number | null;
+  acceptedByRelevance: number;
+  rejectedByRelevance: number;
+  relevanceRejectionReasonCounts: Array<{
+    reason: string;
+    count: number;
+  }>;
+
   created: number;
   updated: number;
   errors: string[];
@@ -44,6 +54,10 @@ export type ApifyImportCampaignReport = {
   totalMappedOffers: number;
   totalPreparedOffers: number;
   totalUniqueOffers: number;
+
+  totalAcceptedByRelevance: number;
+  totalRejectedByRelevance: number;
+
   totalCreated: number;
   totalUpdated: number;
   totalDuplicatesSkipped: number;
@@ -140,7 +154,9 @@ export async function runApifyImportCampaign(
   const token = process.env.APIFY_TOKEN;
 
   if (!token) {
-    throw new Error("APIFY_TOKEN est manquant dans les variables d’environnement.");
+    throw new Error(
+      "APIFY_TOKEN est manquant dans les variables d’environnement.",
+    );
   }
 
   const dryRun = options.dryRun ?? false;
@@ -149,20 +165,19 @@ export async function runApifyImportCampaign(
   const selectedSources = options.sources;
   const startedAt = new Date().toISOString();
 
-  const activeScenario = await prisma.searchScenario.findFirst({
-    where: {
-      isActive: true,
-    },
-    orderBy: {
-      updatedAt: "desc",
-    },
-  });
+  const activeSearchContext = await getActiveSearchContext();
 
-  if (!activeScenario) {
+  if (!activeSearchContext) {
     throw new Error("Aucun scénario de recherche actif trouvé.");
   }
 
+  const activeScenario = activeSearchContext.searchScenario;
+  const scoringProfile = mapCandidateProfileToScoringProfile(
+    activeSearchContext.candidateProfile,
+  );
+
   const baseCriteria = mapSearchScenarioToJobSearchCriteria(activeScenario);
+
   const criteria = applySelectedLocations(baseCriteria, options.locations);
 
   if (criteria.locations.length === 0) {
@@ -213,6 +228,12 @@ export async function runApifyImportCampaign(
         externalOffers,
         sourceLabel: `external:${plan.source}:apify-actor:${plan.location}`,
         dryRun,
+        relevanceFilter: {
+          enabled: true,
+          minScore: 40,
+          profile: scoringProfile,
+          searchLocations: criteria.locations,
+        },
       });
 
       planReports.push({
@@ -227,6 +248,14 @@ export async function runApifyImportCampaign(
         uniqueOffers: importReport.uniqueOffers,
         duplicatesSkipped: importReport.duplicatesSkipped,
         previewErrors: importReport.previewErrors,
+
+        relevanceFilterEnabled: importReport.relevanceFilterEnabled,
+        relevanceFilterMinScore: importReport.relevanceFilterMinScore,
+        acceptedByRelevance: importReport.acceptedByRelevance,
+        rejectedByRelevance: importReport.rejectedByRelevance,
+        relevanceRejectionReasonCounts:
+          importReport.relevanceRejectionReasonCounts,
+
         created: importReport.created,
         updated: importReport.updated,
         errors: importReport.errors,
@@ -245,6 +274,13 @@ export async function runApifyImportCampaign(
         uniqueOffers: 0,
         duplicatesSkipped: 0,
         previewErrors: 0,
+
+        relevanceFilterEnabled: false,
+        relevanceFilterMinScore: null,
+        acceptedByRelevance: 0,
+        rejectedByRelevance: 0,
+        relevanceRejectionReasonCounts: [],
+
         created: 0,
         updated: 0,
         errors: [error instanceof Error ? error.message : "Erreur inconnue"],
@@ -279,8 +315,13 @@ export async function runApifyImportCampaign(
       (sum, plan) => sum + plan.duplicatesSkipped,
       0,
     ),
-    totalErrors: planReports.reduce(
-      (sum, plan) => sum + plan.errors.length,
+    totalErrors: planReports.reduce((sum, plan) => sum + plan.errors.length, 0),
+    totalAcceptedByRelevance: planReports.reduce(
+      (sum, plan) => sum + plan.acceptedByRelevance,
+      0,
+    ),
+    totalRejectedByRelevance: planReports.reduce(
+      (sum, plan) => sum + plan.rejectedByRelevance,
       0,
     ),
     plans: planReports,

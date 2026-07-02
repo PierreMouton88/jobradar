@@ -3,6 +3,14 @@ import { getOffers } from "@/lib/offers/get-offers";
 import { OfferFilters } from "@/components/offers/OfferFilters";
 import { OfferList } from "@/components/offers/OfferList";
 
+type PriorityFilter =
+  | "very_promising"
+  | "interesting"
+  | "needs_ai_analysis"
+  | "watch"
+  | "low_priority"
+  | "probably_ignore";
+
 type OffersPageProps = {
   searchParams: Promise<{
     page?: string;
@@ -12,6 +20,7 @@ type OffersPageProps = {
     source?: string;
     contractType?: string;
     sort?: string;
+    priority?: string;
   }>;
 };
 
@@ -50,12 +59,19 @@ function parseDateRange(
 
 function parseSource(
   value: string | undefined,
-): "static-html" | "fake-dynamic-jobs" | "indeed" | "linkedin" | undefined {
+):
+  | "static-html"
+  | "fake-dynamic-jobs"
+  | "indeed"
+  | "linkedin"
+  | "meteojob"
+  | undefined {
   if (
     value === "static-html" ||
     value === "fake-dynamic-jobs" ||
     value === "indeed" ||
-    value === "linkedin"
+    value === "linkedin" ||
+    value === "meteojob"
   ) {
     return value;
   }
@@ -89,8 +105,27 @@ function parseContractType(
 
 function parseSort(
   value: string | undefined,
-): "scrapedAt-desc" | "createdAt-desc" | undefined {
-  if (value === "scrapedAt-desc" || value === "createdAt-desc") {
+): "scrapedAt-desc" | "createdAt-desc" | "priority-desc" | undefined {
+  if (
+    value === "scrapedAt-desc" ||
+    value === "createdAt-desc" ||
+    value === "priority-desc"
+  ) {
+    return value;
+  }
+
+  return undefined;
+}
+
+function parsePriority(value: string | undefined): PriorityFilter | undefined {
+  if (
+    value === "very_promising" ||
+    value === "interesting" ||
+    value === "needs_ai_analysis" ||
+    value === "watch" ||
+    value === "low_priority" ||
+    value === "probably_ignore"
+  ) {
     return value;
   }
 
@@ -105,6 +140,7 @@ function buildOffersPageHref(
     source?: string;
     contractType?: string;
     sort?: string;
+    priority?: string;
   },
   page: number,
 ): string {
@@ -136,7 +172,107 @@ function buildOffersPageHref(
     params.set("sort", currentParams.sort);
   }
 
+  if (currentParams.priority) {
+    params.set("priority", currentParams.priority);
+  }
+
   return `/offers?${params.toString()}`;
+}
+
+const priorityFilters: Array<{
+  value?: PriorityFilter;
+  label: string;
+}> = [
+  { label: "Toutes" },
+  { value: "very_promising", label: "Très prometteuses" },
+  { value: "interesting", label: "Intéressantes" },
+  { value: "needs_ai_analysis", label: "À analyser avec IA" },
+  { value: "watch", label: "À surveiller" },
+  { value: "low_priority", label: "Peu prioritaires" },
+  { value: "probably_ignore", label: "À ignorer" },
+];
+
+function buildPriorityHref(
+  currentParams: {
+    search?: string;
+    remote?: string;
+    dateRange?: string;
+    source?: string;
+    contractType?: string;
+    sort?: string;
+  },
+  priority: PriorityFilter | undefined,
+): string {
+  const params = new URLSearchParams();
+
+  params.set("page", "1");
+
+  if (currentParams.search) {
+    params.set("search", currentParams.search);
+  }
+
+  if (currentParams.remote) {
+    params.set("remote", currentParams.remote);
+  }
+
+  if (currentParams.dateRange) {
+    params.set("dateRange", currentParams.dateRange);
+  }
+
+  if (currentParams.source) {
+    params.set("source", currentParams.source);
+  }
+
+  if (currentParams.contractType) {
+    params.set("contractType", currentParams.contractType);
+  }
+
+  if (currentParams.sort) {
+    params.set("sort", currentParams.sort);
+  }
+
+  if (priority) {
+    params.set("priority", priority);
+  }
+
+  return `/offers?${params.toString()}`;
+}
+
+function PriorityQuickFilters({
+  currentParams,
+  currentPriority,
+}: {
+  currentParams: {
+    search?: string;
+    remote?: string;
+    dateRange?: string;
+    source?: string;
+    contractType?: string;
+    sort?: string;
+  };
+  currentPriority?: PriorityFilter;
+}) {
+  return (
+    <div className="mt-4 flex flex-wrap gap-2">
+      {priorityFilters.map((filter) => {
+        const isActive = filter.value === currentPriority;
+
+        return (
+          <Link
+            key={filter.value ?? "all"}
+            href={buildPriorityHref(currentParams, filter.value)}
+            className={`rounded-full border px-3 py-1.5 text-xs font-medium ${
+              isActive
+                ? "border-blue-500 bg-blue-950 text-blue-200"
+                : "border-gray-700 bg-gray-900 text-gray-300 hover:border-gray-500"
+            }`}
+          >
+            {filter.label}
+          </Link>
+        );
+      })}
+    </div>
+  );
 }
 
 export default async function OffersPage({ searchParams }: OffersPageProps) {
@@ -147,6 +283,7 @@ export default async function OffersPage({ searchParams }: OffersPageProps) {
   const source = parseSource(params.source);
   const contractType = parseContractType(params.contractType);
   const sort = parseSort(params.sort);
+  const priority = parsePriority(params.priority);
 
   const { offers, pagination } = await getOffers({
     page: parsePage(params.page),
@@ -157,12 +294,15 @@ export default async function OffersPage({ searchParams }: OffersPageProps) {
     source,
     contractType,
     sort,
+    priority,
   });
 
   return (
     <main className="mx-auto max-w-6xl p-4 sm:p-6">
       <div>
-        <h1 className="text-2xl font-bold text-gray-50 sm:text-3xl">Offres d’emploi</h1>
+        <h1 className="text-2xl font-bold text-gray-50 sm:text-3xl">
+          Offres d’emploi
+        </h1>
         <p className="mt-2 text-sm text-gray-400">
           {pagination.totalOffers} offre(s) trouvée(s) — page {pagination.page} /{" "}
           {pagination.totalPages}
@@ -176,7 +316,10 @@ export default async function OffersPage({ searchParams }: OffersPageProps) {
         source={source}
         contractType={contractType}
         sort={sort}
+        priority={priority}
       />
+
+      <PriorityQuickFilters currentParams={params} currentPriority={priority} />
 
       <OfferList offers={offers} />
 
