@@ -553,7 +553,7 @@ function buildHtmlEmail(input: {
   <head>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width,initial-scale=1" />
-    <title>JobRadar IA — Digest de veille</title>
+    <title>JobRadar IA — Rapport de veille </title>
   </head>
   <body style="margin:0;padding:0;background:#f8fafc;font-family:Arial,Helvetica,sans-serif;color:#0f172a;">
     <div style="display:none;max-height:0;overflow:hidden;opacity:0;color:transparent;">

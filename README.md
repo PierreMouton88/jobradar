@@ -14,6 +14,9 @@ L’objectif est de construire progressivement une application capable de :
 - interroger les offres, le profil candidat et les documents profil/CV avec du RAG ;
 - utiliser un agent avec tools contrôlés ;
 - générer un rapport Markdown de veille ;
+- générer un digest email texte/HTML à partir du rapport ;
+- envoyer le rapport par SMTP avec dry-run, preview, sandbox Mailtrap puis Brevo ;
+- orchestrer un daily report limité aux offres récentes avec analyse IA contrôlée du top d’offres candidates ;
 - générer des inputs Apify dynamiques depuis les scénarios de recherche ;
 - piloter des campagnes d’import Apify depuis l’interface `/imports` avec sélection des sources, localisations et localisations custom ;
 - préfiltrer les imports Apify selon la pertinence profil avant insertion en base ;
@@ -53,7 +56,10 @@ sources réalistes / exports externes / actors Apify
 → campagnes d’import Apify pilotées depuis l’interface `/imports`
 → rapport de campagne affiché dans l’UI
 → filtrage et tri des offres par priorité dans `/offers`
-→ distribution éventuelle du rapport
+→ rapport Markdown scoped aux offres récentes
+→ analyse IA contrôlée du top d’offres récentes
+→ digest email HTML actionnable
+→ distribution SMTP contrôlée via Mailtrap / Brevo
 ```
 
 ---
@@ -91,10 +97,15 @@ Le projet couvre actuellement :
 - affichage du score, de la priorité, de l’état d’analyse IA et des raisons de scoring dans les cartes d’offres ;
 - filtres rapides par priorité et tri par priorité puis score ;
 - rapport Markdown local de veille ;
+- rapport Markdown limité aux offres récentes avec `--recent-hours` ;
+- digest email texte et HTML à partir du rapport ;
+- envoi SMTP contrôlé avec preview, dry-run, Mailtrap Sandbox et Brevo ;
+- orchestration `report:daily` : sélection des offres fraîches, analyse IA optionnelle limitée, régénération du rapport et envoi optionnel ;
 - profils candidat et scénarios de recherche stockés en base ;
 - scoring profil final plus tolérant aux informations manquantes, au senior et aux localisations hors préférences ;
 - priorisation heuristique des offres avec file de priorité ;
 - analyse IA contrôlée par CLI avec `--dry-run`, `--limit` et `--run` ;
+- priorisation renforcée pour éviter de remonter en IA les alternances, stages et stacks dominantes Java / .NET / C# sans signal JavaScript / TypeScript suffisant ;
 - tests unitaires avec Vitest ;
 - lint, build et script global de vérification.
 
@@ -136,7 +147,11 @@ analyse IA contrôlée avec --run explicite
 ↓
 stockage JobAnalysis
 ↓
-rapport Markdown de veille
+rapport Markdown de veille global ou limité aux offres récentes
+↓
+digest email texte/HTML
+↓
+distribution SMTP contrôlée avec dry-run, --send et provider externe
 ↓
 indexation RAG générique du profil, des documents profil/CV et des offres
 ↓
@@ -168,6 +183,9 @@ L’objectif n’est pas seulement d’obtenir une application fonctionnelle, ma
 - pourquoi isoler les différences de formats dans des adapters et des mappers ;
 - comment réduire le bruit des imports avec un préfiltre déterministe avant écriture en base ;
 - comment construire un rapport opérationnel de veille ;
+- comment distinguer rapport complet Markdown et digest distribuable ;
+- comment envoyer un email transactionnel avec SMTP, Nodemailer, Mailtrap et Brevo sans exposer les secrets ;
+- comment orchestrer un workflow quotidien avec dry-run, flags explicites, analyse IA limitée et envoi contrôlé ;
 - comment rendre un scoring plus tolérant aux données manquantes sans perdre l’explicabilité ;
 - comment ajouter des garde-fous autour des appels IA ;
 - comment fonctionne un RAG avec embeddings, pgvector, contexte et sources ;
@@ -219,6 +237,17 @@ L’objectif n’est pas seulement d’obtenir une application fonctionnelle, ma
 - Agent avec tools contrôlés
 - Mode fake IA avec `USE_FAKE_AI`
 - CLI d’analyse IA contrôlée avec limite et dry-run
+
+### Reporting / distribution
+
+- Rapports Markdown locaux
+- Digest email texte et HTML
+- Nodemailer
+- SMTP
+- Mailtrap Sandbox pour tester sans vraie distribution
+- Brevo SMTP pour l’envoi réel
+- `dotenv` pour charger les variables d’environnement dans les scripts CLI
+- Garde-fous `--run-ai` et `--send`
 
 ### Qualité / tests
 
@@ -280,6 +309,12 @@ jobradar-ia/
 │  │  └─ read-cli-question.ts
 │  ├─ imports/
 │  │  └─ external-offer-relevance-filter.ts
+│  ├─ distribution/
+│  │  ├─ email-smtp-config.ts
+│  │  └─ send-email-with-smtp.ts
+│  ├─ reports/
+│  │  ├─ build-jobradar-report-email-preview.ts
+│  │  └─ read-latest-jobradar-report.ts
 │  ├─ offers/
 │  ├─ profile/
 │  ├─ rag/
@@ -319,6 +354,9 @@ jobradar-ia/
 │  ├─ import-external-offers.ts
 │  ├─ preview-apify-actor-inputs.ts
 │  ├─ generate-jobradar-report.ts
+│  ├─ preview-jobradar-report-email.ts
+│  ├─ send-jobradar-report-email.ts
+│  ├─ generate-daily-report-email.ts
 │  ├─ analyze-ai-candidates.ts
 │  ├─ preview-candidate-profile-rag-document.ts
 │  ├─ index-candidate-profile-rag-document.ts
@@ -715,7 +753,12 @@ Commande :
 
 ```bash
 npm run report:generate
+npm run report:generate -- --recent-hours=24
 ```
+
+La commande sans option génère un rapport global des offres réelles.
+
+L’option `--recent-hours` limite le périmètre actionnable du rapport aux offres créées récemment, par exemple les dernières 24h.
 
 Fichier généré :
 
@@ -726,7 +769,8 @@ reports/jobradar-report-YYYY-MM-DD.md
 Le rapport contient maintenant :
 
 - résumé global ;
-- mode rapport ;
+- mode rapport global ou récent ;
+- fenêtre analysée si `--recent-hours` est utilisé ;
 - profil candidat et scénario de recherche actifs ;
 - nombre total d’offres ;
 - nombre d’offres réelles ;
@@ -1631,6 +1675,8 @@ Décisions importantes :
 - les offres techniques imparfaites doivent entrer en base puis être classées ;
 - les offres manifestement hors métier doivent être écartées avant import ;
 - le nettoyage DB reste un script volontaire, jamais une action UI automatique.
+- la priorisation peut déclasser les alternances, stages et stacks principales Java / .NET / C# sans signal JavaScript / TypeScript suffisant pour éviter de consommer l’analyse IA sur des offres peu alignées.
+- la localisation ne doit pas être un blocage dur, car certains runs peuvent cibler volontairement d’autres zones comme la Bretagne ou l’Île-de-France.
 
 Limites volontaires :
 
@@ -1642,29 +1688,154 @@ Limites volontaires :
 
 ---
 
+### Module 22 — V2 : distribution du rapport
+
+Statut : terminé.
+
+Objectif : transformer le rapport Markdown en digest distribuable et l’envoyer par email avec des garde-fous.
+
+Avant le module 22 :
+
+```txt
+rapport Markdown local
+→ lecture manuelle dans reports/
+→ pas de distribution externe
+```
+
+Après le module 22 :
+
+```txt
+rapport Markdown global ou récent
+→ digest texte / HTML
+→ preview terminal
+→ SMTP sandbox ou réel
+→ email envoyé uniquement avec --send
+```
+
+Le module a aussi introduit un workflow quotidien plus actionnable :
+
+```txt
+offres créées récemment
+→ sélection des candidates IA du périmètre
+→ analyse IA optionnelle du top N avec --run-ai
+→ régénération du rapport récent
+→ digest HTML
+→ envoi optionnel avec --send
+```
+
+Éléments ajoutés :
+
+- lecture du dernier rapport Markdown via `readLatestJobRadarReport()` ;
+- génération d’un digest email texte ;
+- génération d’un digest email HTML avec header, cartes de statistiques, cartes d’offres, badges de priorité et footer de garde-fous ;
+- preview terminal du digest ;
+- couche SMTP isolée dans `lib/distribution/` ;
+- configuration SMTP validée avec Zod ;
+- envoi avec Nodemailer ;
+- test sécurisé avec Mailtrap Sandbox ;
+- branchement d’un vrai SMTP Brevo ;
+- chargement des variables d’environnement dans les scripts CLI avec `dotenv` ;
+- rapport limité aux offres récentes avec `--recent-hours` ;
+- orchestration `report:daily` ;
+- option `--max-ai` pour limiter le nombre d’analyses IA ;
+- option `--run-ai` obligatoire pour déclencher les appels OpenAI ;
+- option `--send` obligatoire pour envoyer réellement l’email ;
+- réutilisation de la sélection IA existante du module 16 ;
+- sélection IA limitée au périmètre récent via `sinceDate` ;
+- priorisation renforcée pour éviter de remonter en IA les alternances, stages et stacks dominantes Java / .NET / C# sans signal JS/TS suffisant.
+
+Fichiers principaux :
+
+- `lib/reports/read-latest-jobradar-report.ts` ;
+- `lib/reports/build-jobradar-report-email-preview.ts` ;
+- `lib/distribution/email-smtp-config.ts` ;
+- `lib/distribution/send-email-with-smtp.ts` ;
+- `scripts/preview-jobradar-report-email.ts` ;
+- `scripts/send-jobradar-report-email.ts` ;
+- `scripts/generate-daily-report-email.ts` ;
+- `scripts/generate-jobradar-report.ts` ;
+- `lib/ai/get-ai-analysis-candidates.ts` ;
+- `lib/scoring/prioritize-job-offer.ts`.
+
+Commandes ajoutées ou enrichies :
+
+```bash
+npm run report:generate -- --recent-hours=24
+npm run report:email:preview
+npm run report:email:send
+npm run report:email:send -- --send
+npm run report:daily -- --recent-hours=24 --max-ai=5
+npm run report:daily -- --recent-hours=24 --max-ai=5 --run-ai
+npm run report:daily -- --recent-hours=24 --max-ai=5 --run-ai --send
+```
+
+Garde-fous :
+
+- aucun email réel sans `--send` ;
+- aucun appel IA dans le daily report sans `--run-ai` ;
+- limite explicite du nombre d’analyses avec `--max-ai` ;
+- envoi testé d’abord avec Mailtrap Sandbox ;
+- Brevo utilisé comme SMTP réel plutôt que Gmail pour éviter la complexité des app passwords ;
+- secrets SMTP uniquement dans `.env` ou `.env.local`, jamais côté client ;
+- aucune candidature envoyée ;
+- aucun recruteur contacté automatiquement.
+
+Validations réalisées :
+
+```txt
+Mailtrap Sandbox
+→ email capturé sans vraie distribution externe
+
+Brevo SMTP
+→ authentification SMTP corrigée
+→ IP autorisée côté Brevo
+→ email réel envoyé et reçu
+
+Rapport récent
+→ npm run report:generate -- --recent-hours=24
+→ rapport limité aux offres créées dans la fenêtre
+
+Priorisation
+→ alternances sorties du top IA
+→ stacks dominantes Java / .NET / C# sans signal JS/TS déclassées
+→ Bretagne ou autre zone testée non bloquée automatiquement
+```
+
+Décisions importantes :
+
+- le rapport Markdown reste le document complet ;
+- l’email est un digest actionnable, pas une copie exhaustive du rapport ;
+- la distribution reste côté serveur/scripts ;
+- l’automatisation reste volontairement en CLI, pas encore en cron ou UI ;
+- l’analyse IA automatique est acceptée seulement sur un petit volume récent et avec flag explicite ;
+- la localisation ne doit pas être un filtre dur, car certains runs testent volontairement d’autres zones géographiques.
+
+Limites volontaires :
+
+- pas encore de planification automatique quotidienne ;
+- pas encore de bouton UI pour envoyer le rapport ;
+- pas encore d’historique persistant des emails envoyés ;
+- pas encore de rapport attaché en pièce jointe ;
+- les liens locaux pointent encore vers `localhost` ;
+- le périmètre récent utilise `createdAt`, pas encore un identifiant de campagne d’import persistant ;
+- la délivrabilité Brevo peut dépendre de la vérification du sender, du domaine, des DNS et des politiques anti-spam du destinataire.
+
+---
+
 ## Prochains modules
 
-### Module 22 — Distribution du rapport
+### Module 23 — À cadrer
 
 Statut : à venir.
 
-Objectif : envoyer le daily check vers un canal externe.
+Pistes possibles :
 
-Pistes :
-
-- email ;
-- WhatsApp ;
-- Telegram ;
-- Slack / Discord ;
-- intégration ou expérimentation OpenClaw.
-
-Principe :
-
-```txt
-JobRadar génère le rapport.
-Un canal externe le transmet.
-Aucune action sensible automatique.
-```
+- historiser les campagnes d’import et les emails envoyés ;
+- créer un vrai workflow quotidien import → IA → rapport → email ;
+- ajouter un déclenchement UI contrôlé du daily report ;
+- améliorer l’indexation RAG après nouveaux imports ;
+- persister les offres rejetées par le préfiltre ;
+- préparer une démo portfolio plus compacte.
 
 ---
 
@@ -1831,11 +2002,29 @@ npm run rag:answer-documents -- "Comment Pierre devrait-il se présenter pour un
 
 Note : le script actuel d’indexation des offres peut volontairement limiter le nombre d’offres indexées afin de contrôler les coûts OpenAI.
 
-### Reporting
+### Reporting et distribution email
 
 ```bash
 npm run report:generate
+npm run report:generate -- --recent-hours=24
+npm run report:email:preview
+npm run report:email:send
+npm run report:email:send -- --send
+npm run report:daily -- --recent-hours=24 --max-ai=5
+npm run report:daily -- --recent-hours=24 --max-ai=5 --run-ai
+npm run report:daily -- --recent-hours=24 --max-ai=5 --run-ai --send
 ```
+
+Comportement :
+
+- `report:generate` génère le rapport Markdown complet ;
+- `--recent-hours=24` limite le rapport aux offres créées récemment ;
+- `report:email:preview` affiche le digest texte et vérifie que le HTML est généré ;
+- `report:email:send` reste en dry-run sans `--send` ;
+- `report:email:send -- --send` envoie réellement le dernier digest ;
+- `report:daily` orchestre sélection IA, analyse optionnelle, génération du rapport et envoi optionnel ;
+- `--run-ai` est obligatoire pour lancer des appels OpenAI ;
+- `--send` est obligatoire pour envoyer un email réel.
 
 ---
 
@@ -1849,6 +2038,12 @@ OPENAI_API_KEY="your_api_key_here"
 APIFY_TOKEN="your_apify_token_here"
 USE_FAKE_AI=true
 USE_FAKE_SCRAPER=true
+SMTP_HOST="smtp-relay.brevo.com"
+SMTP_PORT="587"
+SMTP_USER="your_brevo_smtp_login"
+SMTP_PASSWORD="your_brevo_smtp_key"
+REPORT_EMAIL_FROM="verified-sender@example.com"
+REPORT_EMAIL_TO="you@example.com
 ```
 
 Règles :
@@ -1856,7 +2051,9 @@ Règles :
 - ne jamais committer `.env` ou `.env.local` ;
 - ne jamais exposer `OPENAI_API_KEY` côté client ;
 - ne jamais exposer `APIFY_TOKEN` côté client ;
-- garder les appels OpenAI et Apify côté serveur/scripts.
+- ne jamais exposer les identifiants SMTP côté client ;
+- utiliser une clé SMTP Brevo, pas le mot de passe du compte Brevo ;
+- garder les appels OpenAI, Apify et SMTP côté serveur/scripts.
 
 ---
 
@@ -1871,6 +2068,11 @@ Le projet respecte plusieurs règles :
 - stocker les analyses pour éviter les appels répétés ;
 - ignorer automatiquement les offres déjà analysées dans le batch IA ;
 - limiter le nombre d’analyses par run avec `--limit` ;
+- limiter les analyses du daily report avec `--max-ai` ;
+- exiger `--run-ai` pour toute analyse IA lancée par le daily report ;
+- exiger `--send` pour tout envoi email réel ;
+- tester les emails avec Mailtrap Sandbox avant un SMTP réel ;
+- utiliser Brevo SMTP côté scripts pour la distribution réelle ;
 - afficher une estimation indicative avant exécution ;
 - afficher les tokens consommés ;
 - estimer le coût des requêtes IA ;
@@ -1888,7 +2090,8 @@ Le projet respecte plusieurs règles :
 - garder le nettoyage des offres peu pertinentes en dry-run par défaut ;
 - distinguer limite demandée et limite effective imposée par un adapter ;
 - garder les futures actions d’agent sous contrôle humain ;
-- ne pas automatiser les candidatures.
+- ne pas automatiser les candidatures ;
+- ne pas contacter automatiquement de recruteur.
 
 ---
 
@@ -1952,6 +2155,21 @@ git commit -m "feat(imports): filter irrelevant offers before import"
 
 git add .
 git commit -m "feat(scoring): make offer scoring and priority more tolerant"
+
+git add .
+git commit -m "feat(reporting): add email preview for job watch report"
+
+git add .
+git commit -m "feat(reporting): send report email through SMTP sandbox"
+
+git add .
+git commit -m "feat(reporting): render email digest as HTML"
+
+git add .
+git commit -m "feat(reporting): scope report to recent offers"
+
+git add .
+git commit -m "feat(reporting): analyze recent offers before daily email"
 ```
 
 ---
@@ -1984,6 +2202,10 @@ JobRadar IA permet d’expliquer :
 - comment distinguer préfiltre d’import, scoring final et priorisation ;
 - comment rendre un scoring explicable avec points positifs et points de vigilance ;
 - comment générer un rapport opérationnel ;
+- comment transformer un rapport Markdown exhaustif en digest email actionnable ;
+- comment envoyer un email transactionnel avec SMTP, Mailtrap, Brevo et Nodemailer ;
+- comment sécuriser un envoi externe avec dry-run, preview et flag `--send` ;
+- comment orchestrer un daily report avec périmètre récent, analyse IA limitée et distribution contrôlée ;
 - comment prioriser des offres avec des règles déterministes ;
 - comment contrôler des appels IA batch avec dry-run, limite et flag explicite ;
 - comment fonctionne un RAG avec embeddings et pgvector ;
@@ -2023,7 +2245,11 @@ Limites connues :
 - le lancement multi-localisations fonctionne, mais un mode asynchrone pourra être nécessaire en cas de déploiement avec timeouts ;
 - les offres rejetées par le préfiltre ne sont pas encore persistées dans une table dédiée ;
 - le nettoyage DB des offres peu pertinentes ne nettoie pas encore automatiquement les documents RAG associés ;
-- la distribution du rapport n’est pas encore faite.
+- la distribution email existe en CLI, mais elle n’est pas encore planifiée automatiquement ;
+- les emails envoyés ne sont pas encore historisés en base ;
+- le daily report utilise une fenêtre `createdAt` récente plutôt qu’un identifiant persistant de campagne d’import ;
+- les liens du digest pointent encore vers l’application locale (`localhost`) ;
+- la délivrabilité Brevo peut nécessiter une configuration sender/domaine plus robuste pour un usage hors test.
 
 Ces limites sont volontaires : le projet avance module par module.
 
