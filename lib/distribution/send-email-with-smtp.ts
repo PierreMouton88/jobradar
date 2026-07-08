@@ -4,6 +4,7 @@ import type { EmailSmtpConfig } from "./email-smtp-config";
 export type SendEmailInput = {
   subject: string;
   text: string;
+  html?: string;
 };
 
 export type SendEmailResult = {
@@ -31,6 +32,7 @@ export async function sendEmailWithSmtp(
     to: config.REPORT_EMAIL_TO,
     subject: input.subject,
     text: input.text,
+    html: input.html,
   });
 
   return {

@@ -52,12 +52,13 @@ async function main() {
   const config = getEmailSmtpConfig();
 
   const result = await sendEmailWithSmtp(
-    {
-      subject: preview.subject,
-      text: preview.body,
-    },
-    config,
-  );
+  {
+    subject: preview.subject,
+    text: preview.text,
+    html: preview.html,
+  },
+  config,
+);
 
   console.log("Email envoyé.");
   console.log(`Message ID : ${result.messageId}`);
