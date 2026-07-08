@@ -4,7 +4,9 @@ export type CandidateProfile = {
   strongSkills: string[];
   learningSkills: string[];
   preferredRemotePolicies: Array<"on_site" | "hybrid" | "full_remote">;
-  preferredContractTypes: Array<"CDI" | "CDD" | "Stage" | "Alternance" | "Freelance">;
+  preferredContractTypes: Array<
+    "CDI" | "CDD" | "Stage" | "Alternance" | "Freelance"
+  >;
   preferredLocations: string[];
 };
 
@@ -14,6 +16,6 @@ export const candidateProfile: CandidateProfile = {
   strongSkills: ["React", "TypeScript", "JavaScript", "NestJS"],
   learningSkills: ["Next.js", "PostgreSQL", "Prisma", "Docker", "LLM", "RAG"],
   preferredRemotePolicies: ["hybrid", "full_remote"],
-  preferredContractTypes: ["CDI", "Alternance"],
+  preferredContractTypes: ["CDI", "CDD"],
   preferredLocations: ["Nancy", "Metz", "Lorraine", "Remote"],
 };

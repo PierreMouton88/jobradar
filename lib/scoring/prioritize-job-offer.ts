@@ -97,6 +97,32 @@ function hasOutOfTargetTitle(offer: ScorableJobOffer): boolean {
   );
 }
 
+function hasTargetJsStackSignal(offer: ScorableJobOffer): boolean {
+  const searchableText = buildSearchableText(offer);
+
+  return containsAny(searchableText, [
+    "react",
+    "typescript",
+    "javascript",
+    "node",
+    "node.js",
+    "nestjs",
+    "next.js",
+    "nextjs",
+    "frontend",
+    "front-end",
+    "backend javascript",
+    "backend node",
+    "fullstack javascript",
+    "full stack javascript",
+    "fullstack react",
+    "full stack react",
+    "api rest node",
+    "express",
+    "prisma",
+  ]);
+}
+
 function hasStrongDevSignal(offer: ScorableJobOffer): boolean {
   const searchableText = buildSearchableText(offer);
 
@@ -118,6 +144,55 @@ function hasStrongDevSignal(offer: ScorableJobOffer): boolean {
     "developpeur web",
     "software engineer",
   ]);
+}
+
+function hasStandaloneJavaSignal(text: string): boolean {
+  const normalizedText = normalizeText(text);
+
+  return /(^|[^a-z0-9])java([^a-z0-9]|$)/.test(normalizedText);
+}
+
+function hasNonTargetBackendStackSignal(offer: ScorableJobOffer): boolean {
+  const searchableText = buildSearchableText(offer);
+
+  return (
+    hasStandaloneJavaSignal(searchableText) ||
+    containsAny(searchableText, [
+      ".net",
+      "dotnet",
+      "c#",
+      "asp.net",
+      "spring",
+      "spring boot",
+      "jee",
+      "j2ee",
+      "kotlin",
+      "scala",
+    ])
+  );
+}
+
+function hasDominantNonTargetStack(offer: ScorableJobOffer): boolean {
+  return (
+    hasNonTargetBackendStackSignal(offer) && !hasTargetJsStackSignal(offer)
+  );
+}
+
+function hasTrainingContractSignal(offer: ScorableJobOffer): boolean {
+  const searchableText = buildSearchableText(offer);
+
+  return (
+    offer.contractType === "Alternance" ||
+    offer.contractType === "Stage" ||
+    containsAny(searchableText, [
+      "alternance",
+      "alternant",
+      "apprenti",
+      "apprentissage",
+      "stage",
+      "stagiaire",
+    ])
+  );
 }
 
 function hasExplicitEngineerRequirement(offer: ScorableJobOffer): boolean {
@@ -184,6 +259,8 @@ export function prioritizeJobOffer(
     offer.qualityScore !== undefined && offer.qualityScore < 50;
   const titleOutOfTarget = hasOutOfTargetTitle(offer);
   const strongDevSignal = hasStrongDevSignal(offer);
+  const dominantNonTargetStack = hasDominantNonTargetStack(offer);
+  const trainingContractSignal = hasTrainingContractSignal(offer);
   const explicitEngineerRequirement = hasExplicitEngineerRequirement(offer);
 
   if (titleOutOfTarget) {
@@ -201,6 +278,34 @@ export function prioritizeJobOffer(
   }
 
   addScoreReason(score, reasons);
+
+  if (dominantNonTargetStack) {
+    reasons.push({
+      type: "negative",
+      label:
+        "Stack principale Java / .NET / C# détectée sans signal JavaScript / TypeScript suffisant",
+    });
+
+    return {
+      priority: "low_priority",
+      label: "Peu prioritaire",
+      reasons,
+    };
+  }
+
+  if (trainingContractSignal) {
+    reasons.push({
+      type: "negative",
+      label:
+        "Stage ou alternance détecté : contrat non prioritaire pour la recherche actuelle",
+    });
+
+    return {
+      priority: "low_priority",
+      label: "Peu prioritaire",
+      reasons,
+    };
+  }
 
   if (hasSeniorLevel) {
     reasons.push({

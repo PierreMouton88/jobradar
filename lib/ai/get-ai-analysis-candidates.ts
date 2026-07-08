@@ -11,6 +11,7 @@ import {
 export type GetAiAnalysisCandidatesOptions = {
   profile: CandidateProfile;
   limit: number;
+  sinceDate?: Date | null;
 };
 
 const REAL_SOURCE_FILTER = {
@@ -21,12 +22,30 @@ const REAL_SOURCE_FILTER = {
   ],
 };
 
+function buildCandidatesScopeFilter(sinceDate?: Date | null) {
+  if (!sinceDate) {
+    return REAL_SOURCE_FILTER;
+  }
+
+  return {
+    AND: [
+      REAL_SOURCE_FILTER,
+      {
+        createdAt: {
+          gte: sinceDate,
+        },
+      },
+    ],
+  };
+}
+
 export async function getAiAnalysisCandidates({
   profile,
   limit,
+  sinceDate = null,
 }: GetAiAnalysisCandidatesOptions): Promise<AiAnalysisCandidate[]> {
   const offers = await prisma.jobOffer.findMany({
-    where: REAL_SOURCE_FILTER,
+    where: buildCandidatesScopeFilter(sinceDate),
     include: {
       analysis: true,
     },

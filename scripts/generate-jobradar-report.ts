@@ -31,6 +31,89 @@ const REAL_SOURCE_FILTER = {
   ],
 };
 
+function getCliOptionValue(optionName: string): string | null {
+  const prefix = `${optionName}=`;
+
+  const inlineArg = process.argv.find((arg) => arg.startsWith(prefix));
+
+  if (inlineArg) {
+    return inlineArg.slice(prefix.length);
+  }
+
+  const optionIndex = process.argv.indexOf(optionName);
+
+  if (optionIndex !== -1) {
+    return process.argv[optionIndex + 1] ?? null;
+  }
+
+  return null;
+}
+
+function parseRecentHoursArg(): number | null {
+  const rawValue = getCliOptionValue("--recent-hours");
+
+  if (!rawValue) {
+    return null;
+  }
+
+  const parsedValue = Number(rawValue);
+
+  if (!Number.isFinite(parsedValue) || parsedValue <= 0) {
+    throw new Error(
+      `Invalid --recent-hours value: "${rawValue}". Expected a positive number.`,
+    );
+  }
+
+  return parsedValue;
+}
+
+function getSinceDate(now: Date, recentHours: number | null): Date | null {
+  if (recentHours === null) {
+    return null;
+  }
+
+  return new Date(now.getTime() - recentHours * 60 * 60 * 1000);
+}
+
+function buildReportScopeFilter(sinceDate: Date | null) {
+  if (!sinceDate) {
+    return REAL_SOURCE_FILTER;
+  }
+
+  return {
+    AND: [
+      REAL_SOURCE_FILTER,
+      {
+        createdAt: {
+          gte: sinceDate,
+        },
+      },
+    ],
+  };
+}
+
+function buildRunScopeFilter(sinceDate: Date | null) {
+  if (!sinceDate) {
+    return {};
+  }
+
+  return {
+    startedAt: {
+      gte: sinceDate,
+    },
+  };
+}
+
+function formatReportScope(sinceDate: Date | null): string {
+  if (!sinceDate) {
+    return "veille réelle globale, sources de test exclues";
+  }
+
+  return `veille réelle récente depuis ${formatDateForDisplay(
+    sinceDate,
+  )}, sources de test exclues`;
+}
+
 function formatDateForFilename(date: Date): string {
   return date.toISOString().slice(0, 10);
 }
@@ -128,6 +211,10 @@ function hasPromisingKeywords(offer: {
 
 async function main() {
   const now = new Date();
+  const recentHours = parseRecentHoursArg();
+  const sinceDate = getSinceDate(now, recentHours);
+  const reportScopeFilter = buildReportScopeFilter(sinceDate);
+  const runScopeFilter = buildRunScopeFilter(sinceDate);
 
   const activeSearchContext = await getActiveSearchContext();
   const scoringProfile = activeSearchContext
@@ -137,6 +224,7 @@ async function main() {
   const [
     offersCount,
     realOffersCount,
+    reportScopeOffersCount,
     recentOffers,
     recentRuns,
     lowQualityOffers,
@@ -149,8 +237,12 @@ async function main() {
       where: REAL_SOURCE_FILTER,
     }),
 
+    prisma.jobOffer.count({
+      where: reportScopeFilter,
+    }),
+
     prisma.jobOffer.findMany({
-      where: REAL_SOURCE_FILTER,
+      where: reportScopeFilter,
       orderBy: {
         createdAt: "desc",
       },
@@ -158,6 +250,7 @@ async function main() {
     }),
 
     prisma.scrapingRun.findMany({
+      where: runScopeFilter,
       orderBy: {
         startedAt: "desc",
       },
@@ -167,7 +260,7 @@ async function main() {
     prisma.jobOffer.findMany({
       where: {
         AND: [
-          REAL_SOURCE_FILTER,
+          reportScopeFilter,
           {
             qualityScore: {
               lt: 70,
@@ -182,7 +275,7 @@ async function main() {
     }),
 
     prisma.jobOffer.findMany({
-      where: REAL_SOURCE_FILTER,
+      where: reportScopeFilter,
       include: {
         analysis: true,
       },
@@ -195,7 +288,7 @@ async function main() {
     prisma.jobOffer.findMany({
       where: {
         AND: [
-          REAL_SOURCE_FILTER,
+          reportScopeFilter,
           {
             analysis: null,
           },
@@ -250,12 +343,12 @@ async function main() {
         priority.priority,
       ),
     )
-    .toSorted((a, b) => b.score.percentage - a.score.percentage)
+    .sort((a, b) => b.score.percentage - a.score.percentage)
     .slice(0, 15);
 
   const ignoredByHeuristicOffers = scoredAndPrioritizedOffers
     .filter(({ priority }) => priority.priority === "probably_ignore")
-    .toSorted((a, b) => b.score.percentage - a.score.percentage)
+    .sort((a, b) => b.score.percentage - a.score.percentage)
     .slice(0, 5);
 
   const offersToAnalyze = unanalyzedOffers
@@ -293,7 +386,11 @@ async function main() {
   reportLines.push("");
   reportLines.push("## Résumé");
   reportLines.push("");
-  reportLines.push("- Mode rapport : veille réelle, sources de test exclues");
+  reportLines.push(`- Mode rapport : ${formatReportScope(sinceDate)}`);
+
+  if (recentHours !== null) {
+    reportLines.push(`- Fenêtre analysée : dernières ${recentHours}h`);
+  }
 
   if (activeSearchContext) {
     reportLines.push(
@@ -315,6 +412,9 @@ async function main() {
 
   reportLines.push(`- Offres totales en base : ${offersCount}`);
   reportLines.push(`- Offres réelles en base : ${realOffersCount}`);
+  reportLines.push(
+    `- Offres dans le périmètre du rapport : ${reportScopeOffersCount}`,
+  );
   reportLines.push(`- Offres récentes affichées : ${recentOffers.length}`);
   reportLines.push(`- Runs récents affichés : ${recentRuns.length}`);
   reportLines.push(
@@ -332,7 +432,11 @@ async function main() {
   reportLines.push("");
 
   if (recentRuns.length === 0) {
-    reportLines.push("Aucun run récent trouvé.");
+    reportLines.push(
+      sinceDate
+        ? "Aucun run trouvé dans la fenêtre analysée."
+        : "Aucun run récent trouvé.",
+    );
   } else {
     for (const run of recentRuns) {
       reportLines.push(
@@ -350,7 +454,11 @@ async function main() {
   reportLines.push("");
 
   if (recentOffers.length === 0) {
-    reportLines.push("Aucune offre trouvée.");
+    reportLines.push(
+      sinceDate
+        ? "Aucune offre trouvée dans la fenêtre analysée."
+        : "Aucune offre trouvée.",
+    );
   } else {
     for (const offer of recentOffers) {
       reportLines.push(`### ${offer.title}`);
@@ -373,7 +481,11 @@ async function main() {
   reportLines.push("");
 
   if (priorityQueueOffers.length === 0) {
-    reportLines.push("Aucune offre prioritaire trouvée.");
+    reportLines.push(
+      sinceDate
+        ? "Aucune offre prioritaire trouvée dans la fenêtre analysée."
+        : "Aucune offre prioritaire trouvée.",
+    );
   } else {
     for (const group of priorityGroups) {
       const groupOffers = priorityQueueOffers.filter(
@@ -420,7 +532,11 @@ async function main() {
   reportLines.push("");
 
   if (ignoredByHeuristicOffers.length === 0) {
-    reportLines.push("Aucune offre écartée par les heuristiques.");
+    reportLines.push(
+      sinceDate
+        ? "Aucune offre écartée par les heuristiques dans la fenêtre analysée."
+        : "Aucune offre écartée par les heuristiques.",
+    );
   } else {
     for (const { offer, score, priority } of ignoredByHeuristicOffers) {
       reportLines.push(`### ${offer.title}`);
@@ -450,7 +566,11 @@ async function main() {
   reportLines.push("");
 
   if (lowQualityOffers.length === 0) {
-    reportLines.push("Aucune offre avec un score qualité faible.");
+    reportLines.push(
+      sinceDate
+        ? "Aucune offre avec un score qualité faible dans la fenêtre analysée."
+        : "Aucune offre avec un score qualité faible.",
+    );
   } else {
     for (const offer of lowQualityOffers) {
       reportLines.push(`### ${offer.title}`);
@@ -484,6 +604,11 @@ async function main() {
   await fs.writeFile(reportPath, reportLines.join("\n"), "utf8");
 
   console.log(`Report generated: ${reportPath}`);
+
+  if (recentHours !== null) {
+    console.log(`Report scope: last ${recentHours}h`);
+    console.log(`Scoped offers: ${reportScopeOffersCount}`);
+  }
 }
 
 main()
