@@ -22,6 +22,9 @@ L’objectif est de construire progressivement une application capable de :
 - préfiltrer les imports Apify selon la pertinence profil avant insertion en base ;
 - nettoyer ponctuellement la base des offres peu pertinentes importées lors de tests ;
 - afficher un rapport de campagne d’import directement dans l’UI ;
+- persister l’historique complet des campagnes d’import Apify, de leurs runs et des offres vues pendant chaque batch ;
+- générer un rapport de veille basé sur le dernier batch réel plutôt que seulement sur une fenêtre temporelle ;
+- générer un rapport complet de campagne pour auditer toutes les offres créées, mises à jour, rejetées ou en erreur ;
 - afficher dans `/offers` un scoring et une priorité plus explicables, avec points positifs et points de vigilance.
 
 Le projet avance module par module afin de rester compréhensible, maintenable et explicable en entretien.
@@ -55,6 +58,9 @@ sources réalistes / exports externes / actors Apify
 → runs Apify contrôlés depuis CLI
 → campagnes d’import Apify pilotées depuis l’interface `/imports`
 → rapport de campagne affiché dans l’UI
+→ historique persistant ImportCampaign / ImportCampaignRun / ImportCampaignOffer
+→ rapport Markdown scoped sur le dernier batch réel
+→ rapport complet d’audit de campagne
 → filtrage et tri des offres par priorité dans `/offers`
 → rapport Markdown scoped aux offres récentes
 → analyse IA contrôlée du top d’offres récentes
@@ -88,6 +94,10 @@ Le projet couvre actuellement :
 - sélection des sources et localisations à lancer ;
 - ajout de localisations custom depuis l’UI ;
 - rapport de campagne d’import affiché dans l’interface ;
+- historique persistant des campagnes d’import avec `ImportCampaign`, `ImportCampaignRun` et `ImportCampaignOffer` ;
+- liaison entre campagnes, runs, offres créées/mises à jour, rejets de pertinence et erreurs ;
+- rapport Markdown basé sur la dernière campagne réussie ou partielle avec `--latest-campaign` / `--campaign-id=latest` ;
+- rapport complet de campagne avec toutes les offres du batch, créées, mises à jour, rejetées ou en erreur ;
 - préfiltre de pertinence profil avant import PostgreSQL ;
 - rapport UI des offres acceptées et rejetées par le préfiltre ;
 - script de nettoyage des offres peu pertinentes déjà présentes en base ;
@@ -131,7 +141,7 @@ préfiltre profil de pertinence pour les imports Apify
 ↓
 import PostgreSQL avec upsert par URL normalisée des offres retenues
 ↓
-ScrapingRun
+ScrapingRun + ImportCampaign + ImportCampaignRun + ImportCampaignOffer
 ↓
 affichage Next.js
 ↓
@@ -147,7 +157,9 @@ analyse IA contrôlée avec --run explicite
 ↓
 stockage JobAnalysis
 ↓
-rapport Markdown de veille global ou limité aux offres récentes
+rapport Markdown de veille global, limité aux offres récentes ou scoped sur le dernier batch réel
+↓
+rapport complet d’audit de campagne si nécessaire
 ↓
 digest email texte/HTML
 ↓
@@ -186,6 +198,9 @@ L’objectif n’est pas seulement d’obtenir une application fonctionnelle, ma
 - comment distinguer rapport complet Markdown et digest distribuable ;
 - comment envoyer un email transactionnel avec SMTP, Nodemailer, Mailtrap et Brevo sans exposer les secrets ;
 - comment orchestrer un workflow quotidien avec dry-run, flags explicites, analyse IA limitée et envoi contrôlé ;
+- pourquoi un rapport actionnable et un journal complet de campagne sont deux objets différents ;
+- comment tracer durablement un batch d’import avec des relations Prisma plutôt qu’avec un simple filtre temporel ;
+- comment relier des offres créées ou mises à jour à une campagne sans casser la déduplication par URL ;
 - comment rendre un scoring plus tolérant aux données manquantes sans perdre l’explicabilité ;
 - comment ajouter des garde-fous autour des appels IA ;
 - comment fonctionne un RAG avec embeddings, pgvector, contexte et sources ;
@@ -241,6 +256,7 @@ L’objectif n’est pas seulement d’obtenir une application fonctionnelle, ma
 ### Reporting / distribution
 
 - Rapports Markdown locaux
+- Rapport complet d’audit de campagne
 - Digest email texte et HTML
 - Nodemailer
 - SMTP
@@ -357,6 +373,7 @@ jobradar-ia/
 │  ├─ preview-jobradar-report-email.ts
 │  ├─ send-jobradar-report-email.ts
 │  ├─ generate-daily-report-email.ts
+│  ├─ generate-import-campaign-report.ts
 │  ├─ analyze-ai-candidates.ts
 │  ├─ preview-candidate-profile-rag-document.ts
 │  ├─ index-candidate-profile-rag-document.ts
@@ -378,7 +395,8 @@ jobradar-ia/
 │     └─ cv-pierre.md
 │
 ├─ reports/
-│  └─ jobradar-report-YYYY-MM-DD.md
+│  ├─ jobradar-report-YYYY-MM-DD.md
+│  └─ import-campaign-CAMPAIGN_ID-YYYY-MM-DD.md
 │
 ├─ types/
 │  ├─ external-job-offer.ts
@@ -1680,11 +1698,11 @@ Décisions importantes :
 
 Limites volontaires :
 
-- les offres rejetées par le préfiltre ne sont pas persistées dans une table dédiée ;
+- les offres rejetées par le préfiltre sont maintenant persistées dans l’historique de campagne à partir du module 23, mais pas encore exposées dans une page détail dédiée ;
 - le nettoyage DB ne nettoie pas encore automatiquement l’index RAG générique ;
 - le scoring `/offers` dépend encore du profil TypeScript historique côté UI ;
 - l’UI ne permet pas encore de régler le seuil du préfiltre ;
-- l’historique complet des campagnes d’import n’est pas encore persisté.
+- l’historique complet des campagnes d’import est maintenant persisté à partir du module 23.
 
 ---
 
@@ -1817,25 +1835,174 @@ Limites volontaires :
 - pas encore d’historique persistant des emails envoyés ;
 - pas encore de rapport attaché en pièce jointe ;
 - les liens locaux pointent encore vers `localhost` ;
-- le périmètre récent utilise `createdAt`, pas encore un identifiant de campagne d’import persistant ;
+- le mode `--recent-hours` continue d’exister, mais le module 23 ajoute un périmètre plus fiable basé sur la dernière campagne d’import persistée ;
 - la délivrabilité Brevo peut dépendre de la vérification du sender, du domaine, des DNS et des politiques anti-spam du destinataire.
+
+---
+
+## Module 23 — V2 : historique persistant des campagnes et reporting batch
+
+Statut : terminé.
+
+Objectif : remplacer progressivement la logique fragile “offres créées dans les dernières 24h” par une logique métier basée sur le dernier batch d’import réel.
+
+Avant le module 23 :
+
+```txt
+campagne Apify depuis /imports
+→ rapport immédiat affiché dans l’UI
+→ ScrapingRun par plan
+→ offres créées ou mises à jour
+→ daily report basé sur --recent-hours
+```
+
+Limite observée :
+
+```txt
+une offre mise à jour pendant la campagne
+mais créée en base plusieurs jours avant
+→ invisible pour une logique basée uniquement sur createdAt
+```
+
+Après le module 23 :
+
+```txt
+campagne Apify
+→ ImportCampaign
+→ ImportCampaignRun par source/localisation/actor
+→ ImportCampaignOffer par offre vue pendant le batch
+→ CREATED / UPDATED / REJECTED_BY_RELEVANCE / PREVIEW_ERROR / IMPORT_ERROR
+→ rapport Markdown scoped sur le dernier batch réel
+→ analyse IA contrôlée des offres du batch
+→ rapport complet d’audit de campagne
+```
+
+Éléments ajoutés :
+
+- modèles Prisma `ImportCampaign`, `ImportCampaignRun` et `ImportCampaignOffer` ;
+- enums `ImportCampaignStatus`, `ImportCampaignRunStatus` et `ImportCampaignOfferAction` ;
+- persistance de chaque campagne lancée depuis `/imports` ;
+- persistance de chaque run source/localisation/actor ;
+- liaison entre `ScrapingRun` et `ImportCampaignRun` ;
+- liaison entre `JobOffer` et les événements de campagne via `ImportCampaignOffer` ;
+- traçage des offres créées et mises à jour ;
+- traçage des offres rejetées par le préfiltre de pertinence ;
+- traçage des erreurs de preview et d’import ;
+- historique des dernières campagnes affiché dans `/imports` ;
+- support du rapport de veille basé sur `--campaign-id=latest` ;
+- support du daily report basé sur `--latest-campaign` ;
+- sélection IA corrigée pour analyser les offres du batch même si elles sont seulement mises à jour ;
+- conservation du mode historique `--recent-hours` ;
+- rapport complet de campagne via `report:campaign`.
+
+Commandes ajoutées ou enrichies :
+
+```bash
+npm run report:generate -- --campaign-id=latest
+npm run report:daily -- --latest-campaign --max-ai=5
+npm run report:daily -- --latest-campaign --max-ai=5 --run-ai
+npm run report:daily -- --latest-campaign --max-ai=5 --run-ai --send
+
+npm run report:campaign -- --campaign-id=latest
+npm run report:campaign -- --campaign-id=<IMPORT_CAMPAIGN_ID>
+```
+
+Rôle des rapports :
+
+```txt
+Digest email
+→ court
+→ actionnable
+→ top offres, file de priorité, alertes
+
+Rapport JobRadar
+→ synthèse de veille
+→ global, récent ou scoped sur une campagne
+
+Rapport complet de campagne
+→ audit détaillé du batch
+→ toutes les offres créées, mises à jour, rejetées ou en erreur
+→ runs Apify, raisons de rejet, liens locaux et analyses IA si disponibles
+```
+
+Décision produit importante :
+
+```txt
+/offers
+= vue globale de recherche et de filtrage sur la base
+
+rapport de campagne
+= journal complet d’une run précise
+
+digest email
+= résumé actionnable, volontairement non exhaustif
+```
+
+Bug corrigé pendant le module :
+
+```txt
+daily report --latest-campaign
+→ sélection IA basée au départ sur campaign.startedAt
+→ excluait les offres UPDATED créées avant la campagne
+→ correction : sélection basée directement sur ImportCampaignOffer.jobOfferId
+```
+
+Validation réalisée :
+
+```txt
+/imports
+→ campagne persistée
+→ ImportCampaign créée
+→ ImportCampaignRun créé
+→ ImportCampaignOffer créé pour les événements d’offres
+
+report:daily --latest-campaign --run-ai
+→ analyse les offres non analysées du batch
+→ y compris les offres UPDATED anciennes
+
+report:email:preview
+→ cohérent après analyse
+→ plus de candidate IA fantôme dans le résumé
+
+report:campaign
+→ génère un rapport complet Markdown de la campagne
+```
+
+Garde-fous conservés :
+
+- aucun appel OpenAI sans `--run-ai` ;
+- aucun email réel sans `--send` ;
+- limite IA avec `--max-ai` ;
+- aucune candidature automatisée ;
+- aucun contact recruteur automatisé ;
+- secrets Apify, OpenAI et SMTP côté serveur/scripts uniquement.
+
+Limites volontaires :
+
+- pas encore de page détail `/imports/[campaignId]` ;
+- pas encore d’onglets UI pour voir toutes les offres créées, mises à jour, rejetées ou en erreur ;
+- le rapport complet de campagne est généré en Markdown, pas encore consultable dans l’UI ;
+- pas encore d’historique des emails envoyés ;
+- pas encore de planification automatique type cron ;
+- l’indexation RAG post-import reste manuelle.
 
 ---
 
 ## Prochains modules
 
-### Module 23 — À cadrer
+### Module 24 — À cadrer
 
 Statut : à venir.
 
 Pistes possibles :
 
-- historiser les campagnes d’import et les emails envoyés ;
-- créer un vrai workflow quotidien import → IA → rapport → email ;
+- créer une page détail `/imports/[campaignId]` pour consulter l’audit de campagne dans l’UI ;
+- ajouter une indexation RAG post-import contrôlée pour les nouvelles offres du batch ;
+- historiser les emails envoyés et les rapports générés ;
 - ajouter un déclenchement UI contrôlé du daily report ;
-- améliorer l’indexation RAG après nouveaux imports ;
-- persister les offres rejetées par le préfiltre ;
+- gérer les profils et scénarios depuis l’interface ;
 - préparer une démo portfolio plus compacte.
+
 
 ---
 
@@ -1847,7 +2014,7 @@ Pistes possibles :
 - `/data-quality` : qualité technique des données.
 - `/profile` : profil candidat actuel.
 - `/rag` : interface RAG profil-aware utilisant le profil candidat, les documents profil/CV Markdown et les offres indexées.
-- `/imports` : pilotage des campagnes Apify, sélection des sources/localisations, lancement côté serveur, préfiltre profil et rapport de campagne.
+- `/imports` : pilotage des campagnes Apify, sélection des sources/localisations, lancement côté serveur, préfiltre profil, rapport de campagne et historique persistant des dernières campagnes.
 - `/agent` : agent avec tools contrôlés.
 - `/fake-dynamic-jobs` : page locale de test Playwright.
 
@@ -1946,7 +2113,7 @@ Interface de pilotage :
 → ajouter une localisation custom
 → lancer une campagne d’import réelle après confirmation
 → appliquer le préfiltre profil avant insertion en base
-→ consulter le rapport de campagne dans l’UI
+→ consulter le rapport immédiat et l’historique persistant des campagnes dans l’UI
 ```
 
 ### IA
@@ -2007,24 +2174,33 @@ Note : le script actuel d’indexation des offres peut volontairement limiter le
 ```bash
 npm run report:generate
 npm run report:generate -- --recent-hours=24
+npm run report:generate -- --campaign-id=latest
 npm run report:email:preview
 npm run report:email:send
 npm run report:email:send -- --send
 npm run report:daily -- --recent-hours=24 --max-ai=5
 npm run report:daily -- --recent-hours=24 --max-ai=5 --run-ai
 npm run report:daily -- --recent-hours=24 --max-ai=5 --run-ai --send
+npm run report:daily -- --latest-campaign --max-ai=5
+npm run report:daily -- --latest-campaign --max-ai=5 --run-ai
+npm run report:daily -- --latest-campaign --max-ai=5 --run-ai --send
+npm run report:campaign -- --campaign-id=latest
+npm run report:campaign -- --campaign-id=<IMPORT_CAMPAIGN_ID>
 ```
 
 Comportement :
 
-- `report:generate` génère le rapport Markdown complet ;
+- `report:generate` génère le rapport Markdown de veille ;
 - `--recent-hours=24` limite le rapport aux offres créées récemment ;
+- `--campaign-id=latest` limite le rapport au dernier batch d’import réel `SUCCESS` ou `PARTIAL` ;
 - `report:email:preview` affiche le digest texte et vérifie que le HTML est généré ;
 - `report:email:send` reste en dry-run sans `--send` ;
 - `report:email:send -- --send` envoie réellement le dernier digest ;
 - `report:daily` orchestre sélection IA, analyse optionnelle, génération du rapport et envoi optionnel ;
+- `--latest-campaign` fait travailler le daily sur le dernier batch persistant plutôt que sur `createdAt` ;
 - `--run-ai` est obligatoire pour lancer des appels OpenAI ;
-- `--send` est obligatoire pour envoyer un email réel.
+- `--send` est obligatoire pour envoyer un email réel ;
+- `report:campaign` génère le rapport complet d’audit d’une campagne, avec offres créées, mises à jour, rejetées et erreurs.
 
 ---
 
@@ -2043,7 +2219,7 @@ SMTP_PORT="587"
 SMTP_USER="your_brevo_smtp_login"
 SMTP_PASSWORD="your_brevo_smtp_key"
 REPORT_EMAIL_FROM="verified-sender@example.com"
-REPORT_EMAIL_TO="you@example.com
+REPORT_EMAIL_TO="you@example.com"
 ```
 
 Règles :
@@ -2086,6 +2262,8 @@ Le projet respecte plusieurs règles :
 - lancer les campagnes UI via une Server Action côté serveur ;
 - demander une confirmation UI avant lancement d’une campagne Apify ;
 - sélectionner explicitement les sources et localisations à lancer ;
+- historiser les campagnes, runs et événements d’offres pour auditer ce qu’un batch a réellement produit ;
+- baser le rapport batch sur `ImportCampaignOffer` plutôt que sur `createdAt` ;
 - filtrer les offres hors métier avant import en base ;
 - garder le nettoyage des offres peu pertinentes en dry-run par défaut ;
 - distinguer limite demandée et limite effective imposée par un adapter ;
@@ -2170,6 +2348,12 @@ git commit -m "feat(reporting): scope report to recent offers"
 
 git add .
 git commit -m "feat(reporting): analyze recent offers before daily email"
+
+git add .
+git commit -m "feat(imports): persist import campaign history"
+
+git add .
+git commit -m "feat(reports): add full import campaign report"
 ```
 
 ---
@@ -2206,6 +2390,9 @@ JobRadar IA permet d’expliquer :
 - comment envoyer un email transactionnel avec SMTP, Mailtrap, Brevo et Nodemailer ;
 - comment sécuriser un envoi externe avec dry-run, preview et flag `--send` ;
 - comment orchestrer un daily report avec périmètre récent, analyse IA limitée et distribution contrôlée ;
+- pourquoi remplacer un filtre temporel par un identifiant de campagne pour auditer un batch ;
+- comment modéliser une campagne d’import avec `ImportCampaign`, `ImportCampaignRun` et `ImportCampaignOffer` ;
+- comment distinguer digest actionnable, rapport de veille et rapport complet d’audit ;
 - comment prioriser des offres avec des règles déterministes ;
 - comment contrôler des appels IA batch avec dry-run, limite et flag explicite ;
 - comment fonctionne un RAG avec embeddings et pgvector ;
@@ -2239,15 +2426,16 @@ Limites connues :
 - il n’y a pas encore d’upload UI, de parsing PDF ou de gestion avancée des documents profil ;
 - l’ancien index `JobOfferEmbedding` existe encore comme héritage V1 et pourra être déprécié plus tard ;
 - l’indexation RAG des nouvelles offres doit encore être lancée manuellement après import ;
-- l’UI de pilotage des imports existe avec rapport immédiat, mais elle n’a pas encore d’historique persistant de campagnes ;
+- l’UI de pilotage des imports affiche maintenant un historique des dernières campagnes, mais pas encore une page détail `/imports/[campaignId]` ;
 - les localisations custom sont saisies manuellement et ne sont pas encore sauvegardées dans un scénario ;
 - les inputs custom par actor ne sont pas encore exposés dans l’UI ;
 - le lancement multi-localisations fonctionne, mais un mode asynchrone pourra être nécessaire en cas de déploiement avec timeouts ;
-- les offres rejetées par le préfiltre ne sont pas encore persistées dans une table dédiée ;
+- les offres rejetées par le préfiltre sont persistées dans `ImportCampaignOffer`, mais elles ne sont pas encore consultables dans une vue UI détaillée ;
 - le nettoyage DB des offres peu pertinentes ne nettoie pas encore automatiquement les documents RAG associés ;
 - la distribution email existe en CLI, mais elle n’est pas encore planifiée automatiquement ;
 - les emails envoyés ne sont pas encore historisés en base ;
-- le daily report utilise une fenêtre `createdAt` récente plutôt qu’un identifiant persistant de campagne d’import ;
+- les rapports complets de campagne sont générés en Markdown local, pas encore attachés au mail ni stockés comme entités dédiées ;
+- le daily report peut maintenant utiliser la dernière campagne persistée, mais le mode `--recent-hours` reste disponible pour les usages historiques ;
 - les liens du digest pointent encore vers l’application locale (`localhost`) ;
 - la délivrabilité Brevo peut nécessiter une configuration sender/domaine plus robuste pour un usage hors test.
 
