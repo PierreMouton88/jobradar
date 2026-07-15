@@ -1,11 +1,18 @@
 import "dotenv/config";
 
 import { spawn } from "node:child_process";
+import {
+  ImportCampaignOfferAction,
+  ImportCampaignStatus,
+} from "@prisma/client";
 import { prisma } from "@/lib/prisma";
 import { getAiAnalysisCandidates } from "@/lib/ai/get-ai-analysis-candidates";
 import { analyzeAndSaveJobOffer } from "@/lib/ai/analyze-and-save-job-offer";
 import { getDefaultCandidateProfile } from "@/lib/search-context/get-active-search-context";
 import { mapCandidateProfileToScoringProfile } from "@/lib/search-context/map-candidate-profile-to-scoring-profile";
+import { mapDbOfferToScorableOffer } from "@/lib/scoring/map-db-offer-to-scorable-offer";
+import { scoreJobOffer } from "@/lib/scoring/score-job-offer";
+import { prioritizeJobOffer } from "@/lib/scoring/prioritize-job-offer";
 import { readLatestJobRadarReport } from "@/lib/reports/read-latest-jobradar-report";
 import { buildJobRadarReportEmailPreview } from "@/lib/reports/build-jobradar-report-email-preview";
 import { getEmailSmtpConfig } from "@/lib/distribution/email-smtp-config";
@@ -16,6 +23,41 @@ type CliOptions = {
   maxAi: number;
   runAi: boolean;
   send: boolean;
+  latestCampaign: boolean;
+};
+
+type DailyReportScope =
+  | {
+      type: "recent-hours";
+      recentHours: number;
+      sinceDate: Date;
+    }
+  | {
+      type: "campaign";
+      campaignId: string;
+      startedAt: Date;
+      jobOfferIds: string[];
+      jobOfferIdSet: Set<string>;
+    };
+
+type DailyAiAnalysisCandidate = {
+  offer: {
+    id: string;
+    title?: string;
+    company?: string | null;
+    url?: string | null;
+  };
+  score: {
+    percentage: number;
+  };
+  priority: {
+    label: string;
+    priority: string;
+    reasons: Array<{
+      type: string;
+      label: string;
+    }>;
+  };
 };
 
 function getCliOptionValue(optionName: string): string | null {
@@ -63,6 +105,7 @@ function parseCliOptions(): CliOptions {
     maxAi: parsePositiveIntegerOption("--max-ai", 5),
     runAi: process.argv.includes("--run-ai"),
     send: process.argv.includes("--send"),
+    latestCampaign: process.argv.includes("--latest-campaign"),
   };
 }
 
@@ -77,6 +120,12 @@ function estimateRunTokens(candidatesCount: number) {
     estimatedTokensPerOffer,
     estimatedTotalTokens: candidatesCount * estimatedTokensPerOffer,
   };
+}
+
+function uniqueStrings(values: Array<string | null>): string[] {
+  return Array.from(
+    new Set(values.filter((value): value is string => typeof value === "string")),
+  );
 }
 
 function runTsxScript(scriptPath: string, args: string[]): Promise<void> {
@@ -99,17 +148,96 @@ function runTsxScript(scriptPath: string, args: string[]): Promise<void> {
   });
 }
 
-async function generateScopedReport(recentHours: number) {
+async function getLatestCampaignScope(): Promise<DailyReportScope> {
+  const campaign = await prisma.importCampaign.findFirst({
+    where: {
+      dryRun: false,
+      status: {
+        in: [ImportCampaignStatus.SUCCESS, ImportCampaignStatus.PARTIAL],
+      },
+    },
+    orderBy: {
+      startedAt: "desc",
+    },
+    include: {
+      offers: {
+        where: {
+          jobOfferId: {
+            not: null,
+          },
+          action: {
+            in: [
+              ImportCampaignOfferAction.CREATED,
+              ImportCampaignOfferAction.UPDATED,
+            ],
+          },
+        },
+        select: {
+          jobOfferId: true,
+        },
+      },
+    },
+  });
+
+  if (!campaign) {
+    throw new Error(
+      "Aucune campagne d’import SUCCESS/PARTIAL trouvée. Lance d’abord une campagne depuis /imports ou utilise le mode --recent-hours.",
+    );
+  }
+
+  const jobOfferIds = uniqueStrings(
+    campaign.offers.map((campaignOffer) => campaignOffer.jobOfferId),
+  );
+
+  return {
+    type: "campaign",
+    campaignId: campaign.id,
+    startedAt: campaign.startedAt,
+    jobOfferIds,
+    jobOfferIdSet: new Set(jobOfferIds),
+  };
+}
+
+async function buildDailyReportScope(
+  options: CliOptions,
+  now: Date,
+): Promise<DailyReportScope> {
+  if (options.latestCampaign) {
+    return getLatestCampaignScope();
+  }
+
+  const sinceDate = getSinceDate(now, options.recentHours);
+
+  return {
+    type: "recent-hours",
+    recentHours: options.recentHours,
+    sinceDate,
+  };
+}
+
+async function generateScopedReport(scope: DailyReportScope) {
+  if (scope.type === "campaign") {
+    await runTsxScript("scripts/generate-jobradar-report.ts", [
+      `--campaign-id=${scope.campaignId}`,
+    ]);
+    return;
+  }
+
   await runTsxScript("scripts/generate-jobradar-report.ts", [
-    `--recent-hours=${recentHours}`,
+    `--recent-hours=${scope.recentHours}`,
   ]);
 }
 
 function printSelectedCandidates(
-  candidates: Awaited<ReturnType<typeof getAiAnalysisCandidates>>,
+  candidates: DailyAiAnalysisCandidate[],
+  scope: DailyReportScope,
 ) {
   if (candidates.length === 0) {
-    console.log("Aucune candidate IA trouvée dans la fenêtre analysée.");
+    console.log(
+      scope.type === "campaign"
+        ? "Aucune candidate IA trouvée dans la dernière campagne."
+        : "Aucune candidate IA trouvée dans la fenêtre analysée.",
+    );
     console.log("");
     return;
   }
@@ -138,6 +266,57 @@ function printSelectedCandidates(
 
     console.log("");
   });
+}
+
+async function getScopedAiCandidates(
+  scope: DailyReportScope,
+  profile: Parameters<typeof getAiAnalysisCandidates>[0]["profile"],
+  maxAi: number,
+): Promise<DailyAiAnalysisCandidate[]> {
+  if (scope.type === "recent-hours") {
+    return getAiAnalysisCandidates({
+      profile,
+      limit: maxAi,
+      sinceDate: scope.sinceDate,
+    });
+  }
+
+  if (scope.jobOfferIds.length === 0) {
+    return [];
+  }
+
+const batchOffersWithoutAnalysis = await prisma.jobOffer.findMany({
+  where: {
+    id: {
+      in: scope.jobOfferIds,
+    },
+    analysis: null,
+  },
+  include: {
+    analysis: true,
+  },
+});
+
+  return batchOffersWithoutAnalysis
+    .map((offer) => {
+      const scorableOffer = mapDbOfferToScorableOffer(offer);
+      const score = scoreJobOffer(scorableOffer, profile);
+      const priority = prioritizeJobOffer(scorableOffer, score);
+
+      return {
+        offer: {
+          id: offer.id,
+          title: offer.title,
+          company: offer.company,
+          url: offer.url,
+        },
+        score,
+        priority,
+      };
+    })
+    .filter(({ priority }) => priority.priority === "needs_ai_analysis")
+    .sort((a, b) => b.score.percentage - a.score.percentage)
+    .slice(0, maxAi);
 }
 
 async function sendLatestReportEmail() {
@@ -171,12 +350,19 @@ async function sendLatestReportEmail() {
 async function main() {
   const options = parseCliOptions();
   const now = new Date();
-  const sinceDate = getSinceDate(now, options.recentHours);
+  const scope = await buildDailyReportScope(options, now);
 
   console.log("");
   console.log("JobRadar IA — Daily report");
   console.log("-----------------------------------");
-  console.log(`Fenêtre : dernières ${options.recentHours}h`);
+
+  if (scope.type === "campaign") {
+    console.log(`Périmètre : dernière campagne d’import (${scope.campaignId})`);
+    console.log(`Offres liées au batch : ${scope.jobOfferIds.length}`);
+  } else {
+    console.log(`Fenêtre : dernières ${scope.recentHours}h`);
+  }
+
   console.log(`Max analyses IA : ${options.maxAi}`);
   console.log(`Analyse IA réelle : ${options.runAi ? "oui" : "non"}`);
   console.log(`Envoi email réel : ${options.send ? "oui" : "non"}`);
@@ -192,13 +378,13 @@ async function main() {
 
   const scoringProfile = mapCandidateProfileToScoringProfile(profile);
 
-  const candidates = await getAiAnalysisCandidates({
-    profile: scoringProfile,
-    limit: options.maxAi,
-    sinceDate,
-  });
+  const candidates = await getScopedAiCandidates(
+    scope,
+    scoringProfile,
+    options.maxAi,
+  );
 
-  printSelectedCandidates(candidates);
+  printSelectedCandidates(candidates, scope);
 
   const estimatedRun = estimateRunTokens(candidates.length);
 
@@ -233,7 +419,7 @@ async function main() {
   console.log("Génération du rapport scoped...");
   console.log("");
 
-  await generateScopedReport(options.recentHours);
+  await generateScopedReport(scope);
 
   console.log("");
 

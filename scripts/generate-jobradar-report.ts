@@ -1,5 +1,10 @@
 import fs from "node:fs/promises";
 import path from "node:path";
+import {
+  ImportCampaignOfferAction,
+  ImportCampaignStatus,
+  Prisma,
+} from "@prisma/client";
 import { prisma } from "@/lib/prisma";
 import { mapCandidateProfileToScoringProfile } from "@/lib/search-context/map-candidate-profile-to-scoring-profile";
 import { scoreJobOffer } from "@/lib/scoring/score-job-offer";
@@ -23,7 +28,11 @@ type ScoringExperienceLevel =
 
 type ScoringRemotePolicy = "unknown" | "on_site" | "hybrid" | "full_remote";
 
-const REAL_SOURCE_FILTER = {
+type ReportCampaignScope = NonNullable<
+  Awaited<ReturnType<typeof getCampaignReportScope>>
+>;
+
+const REAL_SOURCE_FILTER: Prisma.JobOfferWhereInput = {
   NOT: [
     { source: { contains: "static-html" } },
     { source: { contains: "fake-dynamic-jobs" } },
@@ -67,6 +76,22 @@ function parseRecentHoursArg(): number | null {
   return parsedValue;
 }
 
+function parseCampaignIdArg(): string | null {
+  const rawValue = getCliOptionValue("--campaign-id");
+
+  if (!rawValue) {
+    return null;
+  }
+
+  const trimmedValue = rawValue.trim();
+
+  if (trimmedValue.length === 0) {
+    throw new Error("Invalid --campaign-id value: expected a non-empty value.");
+  }
+
+  return trimmedValue;
+}
+
 function getSinceDate(now: Date, recentHours: number | null): Date | null {
   if (recentHours === null) {
     return null;
@@ -75,7 +100,23 @@ function getSinceDate(now: Date, recentHours: number | null): Date | null {
   return new Date(now.getTime() - recentHours * 60 * 60 * 1000);
 }
 
-function buildReportScopeFilter(sinceDate: Date | null) {
+function buildReportScopeFilter(
+  sinceDate: Date | null,
+  campaignJobOfferIds: string[] | null,
+): Prisma.JobOfferWhereInput {
+  if (campaignJobOfferIds) {
+    return {
+      AND: [
+        REAL_SOURCE_FILTER,
+        {
+          id: {
+            in: campaignJobOfferIds,
+          },
+        },
+      ],
+    };
+  }
+
   if (!sinceDate) {
     return REAL_SOURCE_FILTER;
   }
@@ -92,7 +133,9 @@ function buildReportScopeFilter(sinceDate: Date | null) {
   };
 }
 
-function buildRunScopeFilter(sinceDate: Date | null) {
+function buildRunScopeFilter(
+  sinceDate: Date | null,
+): Prisma.ScrapingRunWhereInput {
   if (!sinceDate) {
     return {};
   }
@@ -112,6 +155,12 @@ function formatReportScope(sinceDate: Date | null): string {
   return `veille réelle récente depuis ${formatDateForDisplay(
     sinceDate,
   )}, sources de test exclues`;
+}
+
+function formatCampaignReportScope(scope: ReportCampaignScope): string {
+  return `dernier batch d’import ${scope.campaign.id} lancé le ${formatDateForDisplay(
+    scope.campaign.startedAt,
+  )}`;
 }
 
 function formatDateForFilename(date: Date): string {
@@ -209,11 +258,92 @@ function hasPromisingKeywords(offer: {
   return keywords.some((keyword) => text.includes(keyword));
 }
 
+function uniqueStrings(values: Array<string | null>): string[] {
+  return Array.from(
+    new Set(
+      values.filter((value): value is string => typeof value === "string"),
+    ),
+  );
+}
+
+async function getCampaignReportScope(campaignIdArg: string | null) {
+  if (!campaignIdArg) {
+    return null;
+  }
+
+  const include = {
+    runs: {
+      orderBy: {
+        startedAt: "desc" as const,
+      },
+    },
+    offers: {
+      where: {
+        jobOfferId: {
+          not: null,
+        },
+        action: {
+          in: [
+            ImportCampaignOfferAction.CREATED,
+            ImportCampaignOfferAction.UPDATED,
+          ],
+        },
+      },
+      select: {
+        jobOfferId: true,
+      },
+    },
+  };
+
+  const campaign =
+    campaignIdArg === "latest"
+      ? await prisma.importCampaign.findFirst({
+          where: {
+            dryRun: false,
+            status: {
+              in: [ImportCampaignStatus.SUCCESS, ImportCampaignStatus.PARTIAL],
+            },
+          },
+          orderBy: {
+            startedAt: "desc",
+          },
+          include,
+        })
+      : await prisma.importCampaign.findUnique({
+          where: {
+            id: campaignIdArg,
+          },
+          include,
+        });
+
+  if (!campaign) {
+    throw new Error(
+      campaignIdArg === "latest"
+        ? "Aucune campagne d’import SUCCESS/PARTIAL trouvée. Lance d’abord une campagne depuis /imports."
+        : `Campagne d’import introuvable : ${campaignIdArg}`,
+    );
+  }
+
+  const jobOfferIds = uniqueStrings(
+    campaign.offers.map((campaignOffer) => campaignOffer.jobOfferId),
+  );
+
+  return {
+    campaign,
+    jobOfferIds,
+  };
+}
+
 async function main() {
   const now = new Date();
-  const recentHours = parseRecentHoursArg();
-  const sinceDate = getSinceDate(now, recentHours);
-  const reportScopeFilter = buildReportScopeFilter(sinceDate);
+  const campaignIdArg = parseCampaignIdArg();
+  const campaignScope = await getCampaignReportScope(campaignIdArg);
+  const recentHours = campaignScope ? null : parseRecentHoursArg();
+  const sinceDate = campaignScope ? null : getSinceDate(now, recentHours);
+  const reportScopeFilter = buildReportScopeFilter(
+    sinceDate,
+    campaignScope?.jobOfferIds ?? null,
+  );
   const runScopeFilter = buildRunScopeFilter(sinceDate);
 
   const activeSearchContext = await getActiveSearchContext();
@@ -226,7 +356,7 @@ async function main() {
     realOffersCount,
     reportScopeOffersCount,
     recentOffers,
-    recentRuns,
+    scrapingRuns,
     lowQualityOffers,
     candidateOffers,
     unanalyzedOffers,
@@ -243,19 +373,24 @@ async function main() {
 
     prisma.jobOffer.findMany({
       where: reportScopeFilter,
+      include: {
+        analysis: true,
+      },
       orderBy: {
         createdAt: "desc",
       },
       take: 10,
     }),
 
-    prisma.scrapingRun.findMany({
-      where: runScopeFilter,
-      orderBy: {
-        startedAt: "desc",
-      },
-      take: 5,
-    }),
+    campaignScope
+      ? Promise.resolve([])
+      : prisma.scrapingRun.findMany({
+          where: runScopeFilter,
+          orderBy: {
+            startedAt: "desc",
+          },
+          take: 5,
+        }),
 
     prisma.jobOffer.findMany({
       where: {
@@ -300,6 +435,16 @@ async function main() {
       take: 50,
     }),
   ]);
+
+  const recentRuns = campaignScope
+    ? campaignScope.campaign.runs.map((run) => ({
+        source: run.sourceLabel ?? run.source,
+        status: run.status,
+        offersCount: run.created + run.updated,
+        startedAt: run.startedAt,
+        errorMessage: run.errorMessage,
+      }))
+    : scrapingRuns;
 
   const scoredAndPrioritizedOffers = scoringProfile
     ? candidateOffers.map((offer) => {
@@ -351,16 +496,9 @@ async function main() {
     .sort((a, b) => b.score.percentage - a.score.percentage)
     .slice(0, 5);
 
-  const offersToAnalyze = unanalyzedOffers
-    .filter((offer) =>
-      hasPromisingKeywords({
-        title: offer.title,
-        description: offer.description,
-        skills: offer.skills,
-      }),
-    )
-    .slice(0, 10);
-
+  const aiAnalysisQueueOffers = priorityQueueOffers.filter(
+  ({ priority }) => priority.priority === "needs_ai_analysis",
+);
   const priorityGroups = [
     {
       priority: "very_promising",
@@ -386,7 +524,41 @@ async function main() {
   reportLines.push("");
   reportLines.push("## Résumé");
   reportLines.push("");
-  reportLines.push(`- Mode rapport : ${formatReportScope(sinceDate)}`);
+
+  if (campaignScope) {
+    reportLines.push(
+      `- Mode rapport : ${formatCampaignReportScope(campaignScope)}`,
+    );
+    reportLines.push(`- Campagne d’import : ${campaignScope.campaign.id}`);
+    reportLines.push(`- Statut campagne : ${campaignScope.campaign.status}`);
+    reportLines.push(
+      `- Source campagne : ${campaignScope.campaign.sourceType}`,
+    );
+    reportLines.push(
+      `- Démarrage campagne : ${formatDateForDisplay(campaignScope.campaign.startedAt)}`,
+    );
+
+    if (campaignScope.campaign.finishedAt) {
+      reportLines.push(
+        `- Fin campagne : ${formatDateForDisplay(campaignScope.campaign.finishedAt)}`,
+      );
+    }
+
+    reportLines.push(
+      `- Runs de campagne : ${campaignScope.campaign.runs.length}`,
+    );
+    reportLines.push(
+      `- Offres créées dans la campagne : ${campaignScope.campaign.totalCreated}`,
+    );
+    reportLines.push(
+      `- Offres mises à jour dans la campagne : ${campaignScope.campaign.totalUpdated}`,
+    );
+    reportLines.push(
+      `- Offres rejetées par pertinence : ${campaignScope.campaign.totalRejectedByRelevance}`,
+    );
+  } else {
+    reportLines.push(`- Mode rapport : ${formatReportScope(sinceDate)}`);
+  }
 
   if (recentHours !== null) {
     reportLines.push(`- Fenêtre analysée : dernières ${recentHours}h`);
@@ -416,9 +588,9 @@ async function main() {
     `- Offres dans le périmètre du rapport : ${reportScopeOffersCount}`,
   );
   reportLines.push(`- Offres récentes affichées : ${recentOffers.length}`);
-  reportLines.push(`- Runs récents affichés : ${recentRuns.length}`);
+  reportLines.push(`- Runs affichés : ${recentRuns.length}`);
   reportLines.push(
-    `- Offres candidates à l’analyse IA : ${offersToAnalyze.length}`,
+  `- Offres candidates à l’analyse IA : ${aiAnalysisQueueOffers.length}`,
   );
   reportLines.push(
     `- Offres dans la file de priorité : ${priorityQueueOffers.length}`,
@@ -433,9 +605,11 @@ async function main() {
 
   if (recentRuns.length === 0) {
     reportLines.push(
-      sinceDate
-        ? "Aucun run trouvé dans la fenêtre analysée."
-        : "Aucun run récent trouvé.",
+      campaignScope
+        ? "Aucun run trouvé pour cette campagne."
+        : sinceDate
+          ? "Aucun run trouvé dans la fenêtre analysée."
+          : "Aucun run récent trouvé.",
     );
   } else {
     for (const run of recentRuns) {
@@ -455,9 +629,11 @@ async function main() {
 
   if (recentOffers.length === 0) {
     reportLines.push(
-      sinceDate
-        ? "Aucune offre trouvée dans la fenêtre analysée."
-        : "Aucune offre trouvée.",
+      campaignScope
+        ? "Aucune offre créée ou mise à jour dans cette campagne."
+        : sinceDate
+          ? "Aucune offre trouvée dans la fenêtre analysée."
+          : "Aucune offre trouvée.",
     );
   } else {
     for (const offer of recentOffers) {
@@ -482,9 +658,11 @@ async function main() {
 
   if (priorityQueueOffers.length === 0) {
     reportLines.push(
-      sinceDate
-        ? "Aucune offre prioritaire trouvée dans la fenêtre analysée."
-        : "Aucune offre prioritaire trouvée.",
+      campaignScope
+        ? "Aucune offre prioritaire trouvée dans cette campagne."
+        : sinceDate
+          ? "Aucune offre prioritaire trouvée dans la fenêtre analysée."
+          : "Aucune offre prioritaire trouvée.",
     );
   } else {
     for (const group of priorityGroups) {
@@ -533,9 +711,11 @@ async function main() {
 
   if (ignoredByHeuristicOffers.length === 0) {
     reportLines.push(
-      sinceDate
-        ? "Aucune offre écartée par les heuristiques dans la fenêtre analysée."
-        : "Aucune offre écartée par les heuristiques.",
+      campaignScope
+        ? "Aucune offre écartée par les heuristiques dans cette campagne."
+        : sinceDate
+          ? "Aucune offre écartée par les heuristiques dans la fenêtre analysée."
+          : "Aucune offre écartée par les heuristiques.",
     );
   } else {
     for (const { offer, score, priority } of ignoredByHeuristicOffers) {
@@ -556,7 +736,32 @@ async function main() {
           reportLines.push(`  - ${reason.label}`);
         }
       }
+      if (offer.analysis) {
+        reportLines.push(`- Analyse IA : oui`);
+        reportLines.push(`- Résumé IA : ${offer.analysis.summary}`);
+        reportLines.push(`- Niveau IA : ${offer.analysis.experienceLevel}`);
+        reportLines.push(`- Télétravail IA : ${offer.analysis.remotePolicy}`);
+        reportLines.push(
+          `- Salaire mentionné IA : ${offer.analysis.salaryMentioned ? "oui" : "non"}`,
+        );
+        reportLines.push(`- Mode analyse IA : ${offer.analysis.analysisMode}`);
+        reportLines.push(`- Modèle IA : ${offer.analysis.modelName}`);
+        reportLines.push(`- Tokens IA : ${offer.analysis.totalTokens}`);
 
+        if (offer.analysis.positiveSignals.length > 0) {
+          reportLines.push(
+            `- Signaux positifs IA : ${offer.analysis.positiveSignals.join(" ; ")}`,
+          );
+        }
+
+        if (offer.analysis.redFlags.length > 0) {
+          reportLines.push(
+            `- Points de vigilance IA : ${offer.analysis.redFlags.join(" ; ")}`,
+          );
+        }
+      } else {
+        reportLines.push(`- Analyse IA : non`);
+      }
       reportLines.push("");
     }
   }
@@ -567,9 +772,11 @@ async function main() {
 
   if (lowQualityOffers.length === 0) {
     reportLines.push(
-      sinceDate
-        ? "Aucune offre avec un score qualité faible dans la fenêtre analysée."
-        : "Aucune offre avec un score qualité faible.",
+      campaignScope
+        ? "Aucune offre avec un score qualité faible dans cette campagne."
+        : sinceDate
+          ? "Aucune offre avec un score qualité faible dans la fenêtre analysée."
+          : "Aucune offre avec un score qualité faible.",
     );
   } else {
     for (const offer of lowQualityOffers) {
@@ -605,7 +812,10 @@ async function main() {
 
   console.log(`Report generated: ${reportPath}`);
 
-  if (recentHours !== null) {
+  if (campaignScope) {
+    console.log(`Report scope: campaign ${campaignScope.campaign.id}`);
+    console.log(`Scoped offers: ${reportScopeOffersCount}`);
+  } else if (recentHours !== null) {
     console.log(`Report scope: last ${recentHours}h`);
     console.log(`Scoped offers: ${reportScopeOffersCount}`);
   }

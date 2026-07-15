@@ -18,6 +18,18 @@ type PriorityOfferDigest = {
   location?: string;
   localUrl?: string;
   sourceUrl?: string;
+
+  aiAnalysis?: string;
+  aiSummary?: string;
+  aiExperienceLevel?: string;
+  aiRemotePolicy?: string;
+  aiSalaryMentioned?: string;
+  aiMode?: string;
+  aiModel?: string;
+  aiTokens?: string;
+  aiPositiveSignals?: string;
+  aiRedFlags?: string;
+
   reasons: string[];
 };
 
@@ -241,6 +253,57 @@ function parsePrioritySections(lines: string[]): PrioritySectionDigest[] {
 
     if (key === "url source") {
       currentOffer.sourceUrl = value;
+      continue;
+    }
+
+    if (key === "analyse ia") {
+      currentOffer.aiAnalysis = value;
+      continue;
+    }
+
+    if (key === "résumé ia") {
+      currentOffer.aiSummary = value;
+      continue;
+    }
+
+    if (key === "niveau ia") {
+      currentOffer.aiExperienceLevel = value;
+      continue;
+    }
+
+    if (key === "télétravail ia") {
+      currentOffer.aiRemotePolicy = value;
+      continue;
+    }
+
+    if (key === "salaire mentionné ia") {
+      currentOffer.aiSalaryMentioned = value;
+      continue;
+    }
+
+    if (key === "mode analyse ia") {
+      currentOffer.aiMode = value;
+      continue;
+    }
+
+    if (key === "modèle ia") {
+      currentOffer.aiModel = value;
+      continue;
+    }
+
+    if (key === "tokens ia") {
+      currentOffer.aiTokens = value;
+      continue;
+    }
+
+    if (key === "signaux positifs ia") {
+      currentOffer.aiPositiveSignals = value;
+      continue;
+    }
+
+    if (key === "points de vigilance ia") {
+      currentOffer.aiRedFlags = value;
+      continue;
     }
   }
 
@@ -291,6 +354,25 @@ function formatOfferDigest(
 
   if (offer.sourceUrl) {
     lines.push(`   URL source : ${offer.sourceUrl}`);
+  }
+  if (offer.aiSummary) {
+    lines.push(`   Résumé IA : ${offer.aiSummary}`);
+  }
+
+  if (offer.aiExperienceLevel || offer.aiRemotePolicy) {
+    lines.push(
+      `   IA : niveau=${offer.aiExperienceLevel ?? "—"} · télétravail=${
+        offer.aiRemotePolicy ?? "—"
+      }`,
+    );
+  }
+
+  if (offer.aiPositiveSignals) {
+    lines.push(`   Signaux IA : ${offer.aiPositiveSignals}`);
+  }
+
+  if (offer.aiRedFlags) {
+    lines.push(`   Vigilances IA : ${offer.aiRedFlags}`);
   }
 
   const usefulReasons = offer.reasons.slice(0, 2);
@@ -413,11 +495,9 @@ function buildSummaryHtml(summaryItems: SummaryItem[]): string {
 }
 
 function buildOfferCardHtml(offer: PriorityOfferDigest, index: number): string {
-  const metaParts = [
-    offer.company,
-    offer.location,
-    offer.score,
-  ].filter((part): part is string => Boolean(part));
+  const metaParts = [offer.company, offer.location, offer.score].filter(
+    (part): part is string => Boolean(part),
+  );
 
   const reasons = offer.reasons.slice(0, 2);
 
@@ -425,10 +505,45 @@ function buildOfferCardHtml(offer: PriorityOfferDigest, index: number): string {
     reasons.length > 0
       ? `
         <ul style="margin:12px 0 0;padding-left:18px;color:#475569;font-size:14px;line-height:21px;">
-          ${reasons
-            .map((reason) => `<li>${escapeHtml(reason)}</li>`)
-            .join("")}
+          ${reasons.map((reason) => `<li>${escapeHtml(reason)}</li>`).join("")}
         </ul>
+              ${
+                offer.aiSummary
+                  ? `
+            <div style="background:#f8fafc;border:1px solid #e2e8f0;border-radius:12px;padding:12px;margin-top:14px;">
+              <div style="font-size:12px;line-height:18px;color:#64748b;font-weight:700;text-transform:uppercase;letter-spacing:0.04em;margin-bottom:6px;">
+                Analyse IA
+              </div>
+              <p style="margin:0 0 8px;font-size:14px;line-height:21px;color:#334155;">
+                ${escapeHtml(offer.aiSummary)}
+              </p>
+              <p style="margin:0 0 6px;font-size:13px;line-height:19px;color:#475569;">
+                <strong>Niveau :</strong> ${escapeHtml(
+                  offer.aiExperienceLevel ?? "—",
+                )}
+                · <strong>Télétravail :</strong> ${escapeHtml(
+                  offer.aiRemotePolicy ?? "—",
+                )}
+                · <strong>Tokens :</strong> ${escapeHtml(offer.aiTokens ?? "—")}
+              </p>
+              ${
+                offer.aiPositiveSignals
+                  ? `<p style="margin:0 0 6px;font-size:13px;line-height:19px;color:#166534;"><strong>Signaux positifs :</strong> ${escapeHtml(
+                      offer.aiPositiveSignals,
+                    )}</p>`
+                  : ""
+              }
+              ${
+                offer.aiRedFlags
+                  ? `<p style="margin:0;font-size:13px;line-height:19px;color:#991b1b;"><strong>Vigilances :</strong> ${escapeHtml(
+                      offer.aiRedFlags,
+                    )}</p>`
+                  : ""
+              }
+            </div>
+          `
+                  : ""
+              }
       `
       : "";
 
@@ -644,11 +759,10 @@ export function buildJobRadarReportEmailPreview(
   const prioritySections = parsePrioritySections(priorityLines);
 
   const topPriorityOffers = getOffersFromSections(
-    prioritySections,
-    ["très prometteuses", "intéressantes"],
-    3,
-  );
-
+  prioritySections,
+  ["très prometteuses", "intéressantes", "à surveiller"],
+  5,
+);
   const aiAnalysisOffers = getOffersFromSections(
     prioritySections,
     ["à analyser avec ia"],

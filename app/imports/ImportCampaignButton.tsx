@@ -276,7 +276,7 @@ export function ImportCampaignButton({
               </div>
 
               <p className="mt-2 text-xs text-gray-500">
-                La campagne utilise une limite de 10 résultats par source et
+                La campagne utilise une limite de 20 résultats par source et
                 localisation. Les localisations sélectionnées sont ensuite
                 limitées à trois plans maximum par source côté serveur.
               </p>
@@ -292,7 +292,7 @@ export function ImportCampaignButton({
               <div className="mt-2 flex items-center justify-between">
                 <span className="text-gray-400">Plafond items bruts</span>
                 <span className="font-semibold text-white">
-                  {selectedSources.length * selectedLocations.length * 10}
+                  {selectedSources.length * selectedLocations.length * 20}
                 </span>
               </div>
             </div>

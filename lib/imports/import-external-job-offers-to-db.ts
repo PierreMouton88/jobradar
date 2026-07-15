@@ -24,6 +24,30 @@ export type ImportExternalJobOffersToDbOptions = {
   relevanceFilter?: ImportExternalJobOffersRelevanceFilterOptions;
 };
 
+export type ImportedExternalJobOfferEventAction =
+  | "CREATED"
+  | "UPDATED"
+  | "REJECTED_BY_RELEVANCE"
+  | "PREVIEW_ERROR"
+  | "IMPORT_ERROR";
+
+export type ImportedExternalJobOfferEvent = {
+  action: ImportedExternalJobOfferEventAction;
+  jobOfferId: string | null;
+
+  source: string;
+  externalId: string | null;
+  title: string | null;
+  company: string | null;
+  location: string | null;
+  url: string | null;
+
+  relevanceScore: number | null;
+  relevanceReasons: string[];
+
+  errorMessage: string | null;
+};
+
 export type ImportExternalJobOffersToDbReport = {
   totalExternalOffers: number;
   preparedOffers: number;
@@ -42,7 +66,35 @@ export type ImportExternalJobOffersToDbReport = {
   errors: string[];
   scrapingRunId: string | null;
   dryRun: boolean;
+
+  offerEvents: ImportedExternalJobOfferEvent[];
 };
+
+function getStringField(value: unknown, fieldName: string): string | null {
+  if (!value || typeof value !== "object") {
+    return null;
+  }
+
+  const fieldValue = (value as Record<string, unknown>)[fieldName];
+
+  if (typeof fieldValue !== "string") {
+    return null;
+  }
+
+  const trimmedValue = fieldValue.trim();
+
+  return trimmedValue.length > 0 ? trimmedValue : null;
+}
+
+function formatPreviewError(error: {
+  index: number;
+  externalId?: string | null;
+  message: string;
+}): string {
+  return `Preview error at index ${error.index}${
+    error.externalId ? ` (${error.externalId})` : ""
+  }: ${error.message}`;
+}
 
 export async function importExternalJobOffersToDb(
   options: ImportExternalJobOffersToDbOptions,
@@ -66,6 +118,8 @@ export async function importExternalJobOffersToDb(
   const offersToImport =
     relevanceFilterResult?.acceptedOffers ?? preview.uniqueOffers;
 
+  const previewErrorMessages = preview.errors.map(formatPreviewError);
+
   const report: ImportExternalJobOffersToDbReport = {
     totalExternalOffers: preview.totalOffers,
     preparedOffers: preview.preparedOffers.length,
@@ -81,15 +135,56 @@ export async function importExternalJobOffersToDb(
 
     created: 0,
     updated: 0,
-    errors: preview.errors.map(
-      (error) =>
-        `Preview error at index ${error.index}${
-          error.externalId ? ` (${error.externalId})` : ""
-        }: ${error.message}`,
-    ),
+    errors: previewErrorMessages,
     scrapingRunId: null,
     dryRun,
+
+    offerEvents: [],
   };
+
+  report.offerEvents.push(
+    ...preview.errors.map((error) => ({
+      action: "PREVIEW_ERROR" as const,
+      jobOfferId: null,
+
+      source: options.sourceLabel,
+      externalId: error.externalId ?? null,
+      title: null,
+      company: null,
+      location: null,
+      url: null,
+
+      relevanceScore: null,
+      relevanceReasons: [],
+
+      errorMessage: formatPreviewError(error),
+    })),
+  );
+
+  if (relevanceFilterResult) {
+    report.offerEvents.push(
+      ...relevanceFilterResult.rejectedOffers.map((rejectedOffer) => ({
+        action: "REJECTED_BY_RELEVANCE" as const,
+        jobOfferId: null,
+
+        source:
+          getStringField(rejectedOffer.offer, "sourceName") ??
+          options.sourceLabel,
+        externalId: getStringField(rejectedOffer.offer, "externalId"),
+        title: rejectedOffer.offer.title,
+        company: rejectedOffer.offer.company,
+        location: rejectedOffer.offer.location,
+        url:
+          getStringField(rejectedOffer.offer, "sourceUrl") ??
+          getStringField(rejectedOffer.offer, "url"),
+
+        relevanceScore: rejectedOffer.score,
+        relevanceReasons: rejectedOffer.reasons,
+
+        errorMessage: null,
+      })),
+    );
+  }
 
   if (dryRun) {
     return report;
@@ -119,7 +214,7 @@ export async function importExternalJobOffersToDb(
         },
       });
 
-      await prisma.jobOffer.upsert({
+      const savedOffer = await prisma.jobOffer.upsert({
         where: {
           url: dbOffer.url,
         },
@@ -131,6 +226,9 @@ export async function importExternalJobOffersToDb(
           ...dbOffer,
           scrapingRunId: scrapingRun.id,
         },
+        select: {
+          id: true,
+        },
       });
 
       if (existingOffer) {
@@ -138,10 +236,45 @@ export async function importExternalJobOffersToDb(
       } else {
         report.created++;
       }
+
+      report.offerEvents.push({
+        action: existingOffer ? "UPDATED" : "CREATED",
+        jobOfferId: savedOffer.id,
+
+        source: dbOffer.source,
+        externalId: getStringField(offer, "externalId"),
+        title: dbOffer.title,
+        company: dbOffer.company,
+        location: dbOffer.location,
+        url: dbOffer.url,
+
+        relevanceScore: null,
+        relevanceReasons: [],
+
+        errorMessage: null,
+      });
     } catch (error) {
-      report.errors.push(
-        error instanceof Error ? error.message : "Erreur inconnue",
-      );
+      const message = error instanceof Error ? error.message : "Erreur inconnue";
+
+      report.errors.push(message);
+
+      report.offerEvents.push({
+        action: "IMPORT_ERROR",
+        jobOfferId: null,
+
+        source: options.sourceLabel,
+        externalId: getStringField(offer, "externalId"),
+        title: getStringField(offer, "title"),
+        company: getStringField(offer, "company"),
+        location: getStringField(offer, "location"),
+        url:
+          getStringField(offer, "sourceUrl") ?? getStringField(offer, "url"),
+
+        relevanceScore: null,
+        relevanceReasons: [],
+
+        errorMessage: message,
+      });
     }
   }
 

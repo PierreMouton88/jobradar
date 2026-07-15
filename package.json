@@ -40,6 +40,7 @@
     "report:email:preview": "tsx scripts/preview-jobradar-report-email.ts",
     "report:email:send": "tsx scripts/send-jobradar-report-email.ts",
     "report:daily": "tsx scripts/generate-daily-report-email.ts",
+    "report:campaign": "tsx scripts/generate-import-campaign-report.ts",
     "ai:analyze-candidates": "tsx scripts/analyze-ai-candidates.ts",
     "apify:preview-inputs": "tsx scripts/preview-apify-actor-inputs.ts",
     "db:cleanup:irrelevant-offers": "tsx scripts/cleanup-irrelevant-job-offers.ts",

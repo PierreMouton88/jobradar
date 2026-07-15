@@ -1,5 +1,7 @@
 import "server-only";
 
+import type { Prisma } from "@prisma/client";
+import { prisma } from "@/lib/prisma";
 import type { JobSearchCriteria } from "@/lib/search/job-search-criteria";
 import type { SupportedApifyActorSource } from "@/lib/sources/apify/apify-actor-adapter";
 import { listApifyActorAdapters } from "@/lib/sources/apify/apify-actor-adapters";
@@ -43,9 +45,11 @@ export type ApifyImportCampaignPlanReport = {
   updated: number;
   errors: string[];
   scrapingRunId: string | null;
+  importCampaignRunId: string | null;
 };
 
 export type ApifyImportCampaignReport = {
+  campaignId: string | null;
   startedAt: string;
   finishedAt: string;
   dryRun: boolean;
@@ -148,6 +152,30 @@ function mapRawItemsToExternalJobOffers(
   }
 }
 
+function getPlanStatus(report: {
+  errors: string[];
+  created: number;
+  updated: number;
+}): "SUCCESS" | "PARTIAL" | "FAILED" {
+  if (report.errors.length === 0) {
+    return "SUCCESS";
+  }
+
+  return report.created + report.updated > 0 ? "PARTIAL" : "FAILED";
+}
+
+function getCampaignStatus(report: {
+  totalErrors: number;
+  totalCreated: number;
+  totalUpdated: number;
+}): "SUCCESS" | "PARTIAL" | "FAILED" {
+  if (report.totalErrors === 0) {
+    return "SUCCESS";
+  }
+
+  return report.totalCreated + report.totalUpdated > 0 ? "PARTIAL" : "FAILED";
+}
+
 export async function runApifyImportCampaign(
   options: RunApifyImportCampaignOptions = {},
 ): Promise<ApifyImportCampaignReport> {
@@ -203,10 +231,42 @@ export async function runApifyImportCampaign(
     }),
   );
 
+  const campaign = await prisma.importCampaign.create({
+    data: {
+      sourceType: "apify",
+      status: "RUNNING",
+      dryRun,
+      selectedSources: adapters.map((adapter) => adapter.source),
+      selectedLocations: criteria.locations,
+
+      searchScenarioId: activeScenario.id,
+      searchScenarioName: activeScenario.name,
+      candidateProfileId: activeSearchContext.candidateProfile.id,
+      candidateName: activeSearchContext.candidateProfile.name,
+
+      startedAt: new Date(startedAt),
+    },
+  });
+
   const planReports: ApifyImportCampaignPlanReport[] = [];
 
   for (const plan of plans) {
     const source = plan.source as SupportedApifyActorSource;
+    const sourceLabel = `external:${plan.source}:apify-actor:${plan.location}`;
+
+    const campaignRun = await prisma.importCampaignRun.create({
+      data: {
+        campaignId: campaign.id,
+        source: plan.source,
+        actorId: plan.actorId,
+        displayName: plan.displayName,
+        location: plan.location,
+        limit: plan.limit,
+        sourceLabel,
+        status: "RUNNING",
+        startedAt: new Date(),
+      },
+    });
 
     try {
       const loader = new ApifyActorRunExternalRawItemsLoader({
@@ -226,7 +286,7 @@ export async function runApifyImportCampaign(
 
       const importReport = await importExternalJobOffersToDb({
         externalOffers,
-        sourceLabel: `external:${plan.source}:apify-actor:${plan.location}`,
+        sourceLabel,
         dryRun,
         relevanceFilter: {
           enabled: true,
@@ -235,6 +295,65 @@ export async function runApifyImportCampaign(
           searchLocations: criteria.locations,
         },
       });
+
+      const planStatus = getPlanStatus(importReport);
+
+      await prisma.importCampaignRun.update({
+        where: {
+          id: campaignRun.id,
+        },
+        data: {
+          status: planStatus,
+          rawItems: loadResult.items.length,
+          mappedOffers: externalOffers.length,
+          preparedOffers: importReport.preparedOffers,
+          uniqueOffers: importReport.uniqueOffers,
+          duplicatesSkipped: importReport.duplicatesSkipped,
+          previewErrors: importReport.previewErrors,
+
+          relevanceFilterEnabled: importReport.relevanceFilterEnabled,
+          relevanceFilterMinScore: importReport.relevanceFilterMinScore,
+          acceptedByRelevance: importReport.acceptedByRelevance,
+          rejectedByRelevance: importReport.rejectedByRelevance,
+          relevanceRejectionReasonCounts:
+            importReport.relevanceRejectionReasonCounts as Prisma.InputJsonValue,
+
+          created: importReport.created,
+          updated: importReport.updated,
+          errors: importReport.errors.length,
+          errorMessage:
+            importReport.errors.length > 0
+              ? importReport.errors.join("\n")
+              : null,
+
+          scrapingRunId: importReport.scrapingRunId,
+          finishedAt: new Date(),
+        },
+      });
+
+      if (importReport.offerEvents.length > 0) {
+        await prisma.importCampaignOffer.createMany({
+          data: importReport.offerEvents.map((event) => ({
+            campaignId: campaign.id,
+            campaignRunId: campaignRun.id,
+            jobOfferId: event.jobOfferId,
+
+            action: event.action,
+
+            source: event.source,
+            externalId: event.externalId,
+            title: event.title,
+            company: event.company,
+            location: event.location,
+            url: event.url,
+
+            relevanceScore: event.relevanceScore,
+            relevanceReasons: event.relevanceReasons,
+
+            errorMessage: event.errorMessage,
+          })),
+        });
+      }
 
       planReports.push({
         source: plan.source,
@@ -260,8 +379,24 @@ export async function runApifyImportCampaign(
         updated: importReport.updated,
         errors: importReport.errors,
         scrapingRunId: importReport.scrapingRunId,
+        importCampaignRunId: campaignRun.id,
       });
     } catch (error) {
+      const errorMessage =
+        error instanceof Error ? error.message : "Erreur inconnue";
+
+      await prisma.importCampaignRun.update({
+        where: {
+          id: campaignRun.id,
+        },
+        data: {
+          status: "FAILED",
+          errors: 1,
+          errorMessage,
+          finishedAt: new Date(),
+        },
+      });
+
       planReports.push({
         source: plan.source,
         actorId: plan.actorId,
@@ -283,15 +418,17 @@ export async function runApifyImportCampaign(
 
         created: 0,
         updated: 0,
-        errors: [error instanceof Error ? error.message : "Erreur inconnue"],
+        errors: [errorMessage],
         scrapingRunId: null,
+        importCampaignRunId: campaignRun.id,
       });
     }
   }
 
   const finishedAt = new Date().toISOString();
 
-  return {
+  const campaignReport: ApifyImportCampaignReport = {
+    campaignId: campaign.id,
     startedAt,
     finishedAt,
     dryRun,
@@ -326,4 +463,35 @@ export async function runApifyImportCampaign(
     ),
     plans: planReports,
   };
+
+  await prisma.importCampaign.update({
+    where: {
+      id: campaign.id,
+    },
+    data: {
+      status: getCampaignStatus(campaignReport),
+      finishedAt: new Date(finishedAt),
+
+      totalRawItems: campaignReport.totalRawItems,
+      totalMappedOffers: campaignReport.totalMappedOffers,
+      totalPreparedOffers: campaignReport.totalPreparedOffers,
+      totalUniqueOffers: campaignReport.totalUniqueOffers,
+      totalAcceptedByRelevance: campaignReport.totalAcceptedByRelevance,
+      totalRejectedByRelevance: campaignReport.totalRejectedByRelevance,
+      totalCreated: campaignReport.totalCreated,
+      totalUpdated: campaignReport.totalUpdated,
+      totalDuplicatesSkipped: campaignReport.totalDuplicatesSkipped,
+      totalErrors: campaignReport.totalErrors,
+
+      errorMessage:
+        campaignReport.totalErrors > 0
+          ? campaignReport.plans
+              .flatMap((plan) => plan.errors)
+              .filter(Boolean)
+              .join("\n")
+          : null,
+    },
+  });
+
+  return campaignReport;
 }
