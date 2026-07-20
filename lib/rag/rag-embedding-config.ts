@@ -1,0 +1,1 @@
+export const RAG_EMBEDDING_MODEL_NAME = "text-embedding-3-small";

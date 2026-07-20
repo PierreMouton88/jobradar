@@ -12,6 +12,7 @@ L’objectif est de construire progressivement une application capable de :
 - prioriser les offres selon leur intérêt réel ;
 - analyser avec IA seulement les offres candidates, avec limite, dry-run et flag explicite ;
 - interroger les offres, le profil candidat et les documents profil/CV avec du RAG ;
+- synchroniser de manière ciblée l’index RAG avec les offres créées ou mises à jour pendant une campagne, avec preview, limites et exécution explicite ;
 - utiliser un agent avec tools contrôlés ;
 - générer un rapport Markdown de veille ;
 - générer un digest email texte/HTML à partir du rapport ;
@@ -25,7 +26,7 @@ L’objectif est de construire progressivement une application capable de :
 - persister l’historique complet des campagnes d’import Apify, de leurs runs et des offres vues pendant chaque batch ;
 - générer un rapport de veille basé sur le dernier batch réel plutôt que seulement sur une fenêtre temporelle ;
 - générer un rapport complet de campagne pour auditer toutes les offres créées, mises à jour, rejetées ou en erreur ;
-- afficher dans `/offers` un scoring et une priorité plus explicables, avec points positifs et points de vigilance.
+- afficher dans `/offers` un scoring et une priorité plus explicables, avec points positifs et points de vigilance ;
 - consulter l’audit complet d’une campagne depuis `/imports/[campaignId]`, avec runs, offres créées, mises à jour, rejetées et erreurs ;
 - trier les offres d’une campagne par score de compatibilité actuel tout en distinguant ce score de la qualité technique des données ;
 - ouvrir directement le rapport complet d’une campagne depuis le digest email.
@@ -40,7 +41,7 @@ La V1 de JobRadar IA est terminée. Elle a construit une base pédagogique compl
 
 La V2 est en cours. Elle transforme progressivement cette base en outil personnel de veille automatisée d’offres d’emploi.
 
-La prochaine phase vise à fermer la boucle opérationnelle : synchronisation RAG par campagne, mise en production, cron quotidien et automatisation bornée du workflow de veille.
+Le module 25 a ajouté la synchronisation RAG contrôlée par campagne. La prochaine phase vise maintenant la mise en production, le cron quotidien et l’automatisation bornée du workflow de veille.
 
 Vision V2 :
 
@@ -72,6 +73,9 @@ sources réalistes / exports externes / actors Apify
 → filtrage et tri des offres par priorité dans `/offers`
 → rapport Markdown scoped aux offres récentes
 → analyse IA contrôlée du top d’offres récentes
+→ synchronisation RAG ciblée par ImportCampaign
+→ preview CREATE / UPDATE / UP_TO_DATE
+→ limites documents / embeddings et exécution explicite
 → digest email HTML actionnable
 → distribution SMTP contrôlée via Mailtrap / Brevo
 ```
@@ -92,6 +96,11 @@ Le projet couvre actuellement :
 - RAG avec embeddings OpenAI et pgvector ;
 - RAG générique profil-aware basé sur `RagDocumentEmbedding` ;
 - documents profil/CV Markdown indexés dans le RAG avec `sourceType = profile_document` ;
+- synchronisation RAG ciblée par `ImportCampaign` pour les événements `CREATED` et `UPDATED` ;
+- preview des documents RAG à créer, mettre à jour ou déjà à jour ;
+- dry-run par défaut, flag `--execute`, limites `--max-documents` et `--max-embeddings` ;
+- mise à jour du titre ou des métadonnées sans nouvel embedding lorsque le contenu vectorisé ne change pas ;
+- exécution RAG idempotente avec erreurs isolées par offre et bilan détaillé ;
 - agent avec tools contrôlés ;
 - import externe depuis JSON / dataset / actors Apify ;
 - génération dynamique d’inputs Apify depuis `SearchScenario` ;
@@ -169,6 +178,16 @@ analyse IA contrôlée avec --run explicite
 ↓
 stockage JobAnalysis
 ↓
+synchronisation RAG de campagne déclenchée séparément avec un campaignId
+↓
+sélection CREATED / UPDATED, déduplication et comparaison avec RagDocumentEmbedding
+↓
+plan CREATE / UPDATE / UP_TO_DATE
+↓
+dry-run par défaut ou exécution bornée avec --execute, --max-documents et --max-embeddings
+↓
+upsert des embeddings nécessaires ou mise à jour légère sans OpenAI
+↓
 rapport Markdown de veille global, limité aux offres récentes ou scoped sur le dernier batch réel
 ↓
 rapport complet d’audit de campagne si nécessaire
@@ -221,6 +240,10 @@ L’objectif n’est pas seulement d’obtenir une application fonctionnelle, ma
 - comment rendre un scoring plus tolérant aux données manquantes sans perdre l’explicabilité ;
 - comment ajouter des garde-fous autour des appels IA ;
 - comment fonctionne un RAG avec embeddings, pgvector, contexte et sources ;
+- comment synchroniser un index RAG de manière incrémentale à partir d’un batch métier ;
+- pourquoi comparer le document attendu au document stocké avant d’appeler OpenAI ;
+- comment séparer sélection, planification, limitation, génération d’embedding et persistance ;
+- pourquoi garder l’import et le RAG séparés tout en les enchaînant dans un même orchestrateur ;
 - comment faire évoluer un RAG centré offres vers un index documentaire générique ;
 - comment ajouter des documents Markdown de profil/CV dans un RAG existant ;
 - comment améliorer le retrieval avec une requête enrichie par le profil candidat ;
@@ -364,6 +387,17 @@ jobradar-ia/
 │  │  ├─ generate-embedding.ts
 │  │  ├─ get-rag-index-stats.ts
 │  │  ├─ job-offer-rag-document.ts
+│  │  ├─ build-job-offer-rag-candidate.ts
+│  │  ├─ select-campaign-rag-job-offer-ids.ts
+│  │  ├─ build-campaign-rag-sync-plan.ts
+│  │  ├─ get-campaign-rag-sync-preview.ts
+│  │  ├─ select-campaign-rag-sync-execution.ts
+│  │  ├─ execute-campaign-rag-sync.ts
+│  │  ├─ save-rag-document-embedding.ts
+│  │  ├─ update-rag-document-without-embedding.ts
+│  │  ├─ rag-document-metadata.ts
+│  │  ├─ rag-document-types.ts
+│  │  ├─ rag-embedding-config.ts
 │  │  ├─ map-active-search-context-to-candidate-profile-rag-input.ts
 │  │  ├─ read-profile-documents.ts
 │  │  └─ search-rag-documents.ts
@@ -402,6 +436,8 @@ jobradar-ia/
 │  ├─ preview-profile-documents.ts
 │  ├─ index-profile-documents.ts
 │  ├─ index-job-offers-rag-documents.ts
+│  ├─ preview-campaign-rag-sync.ts
+│  ├─ sync-campaign-rag.ts
 │  ├─ cleanup-irrelevant-job-offers.ts
 │  ├─ check-rag-document-embeddings.ts
 │  ├─ test-rag-document-search.ts
@@ -1088,6 +1124,9 @@ Scripts RAG ajoutés ou utilisés :
 npm run rag:preview-profile-document
 npm run rag:index-profile-document
 npm run rag:index-job-offer-documents
+npm run rag:campaign:preview -- --campaign-id=<IMPORT_CAMPAIGN_ID>
+npm run rag:campaign:sync -- --campaign-id=<IMPORT_CAMPAIGN_ID> --max-documents=10 --max-embeddings=5
+npm run rag:campaign:sync -- --campaign-id=<IMPORT_CAMPAIGN_ID> --execute --max-documents=10 --max-embeddings=5
 npm run rag:check-documents
 npm run rag:search-documents
 npm run rag:answer-documents
@@ -2117,36 +2156,175 @@ Garde-fous conservés :
 
 ---
 
-## Prochains modules
+## Module 25 — V2 : synchronisation RAG contrôlée par campagne
 
-### Module 25 — V2 : synchronisation RAG contrôlée par campagne
+Statut : terminé.
 
-Statut : à venir.
+Objectif : maintenir `RagDocumentEmbedding` synchronisé avec les offres créées ou mises à jour pendant une campagne précise, sans réindexer inutilement toute la base et sans appeler OpenAI lorsque le document est déjà à jour.
 
-Objectif : maintenir `RagDocumentEmbedding` synchronisé avec les offres créées ou mises à jour pendant une campagne, sans réindexer inutilement toute la base.
-
-Périmètre prévu :
+Avant le module 25 :
 
 ```txt
-ImportCampaign
-→ ImportCampaignOffer CREATED / UPDATED
-→ jobOfferId uniques
-→ comparaison avec les documents RAG existants
-→ preview des créations / mises à jour / éléments déjà à jour
-→ génération d’embeddings avec limite et flag explicite
+scripts/index-job-offers-rag-documents.ts
+→ sélection globale des 10 offres les plus récentes
+→ reconstruction manuelle du document
+→ génération systématique d’un embedding
 → upsert RagDocumentEmbedding
-→ bilan d’exécution
 ```
 
-Garde-fous prévus :
+Limites observées :
 
+- aucune relation avec une campagne d’import précise ;
+- réindexation possible d’un document identique ;
+- appel OpenAI effectué avant de savoir si le contenu avait changé ;
+- pas de preview global ;
+- pas de limite distincte entre documents modifiés et embeddings générés ;
+- pas de bilan exploitable par un futur workflow automatique.
+
+Après le module 25 :
+
+```txt
+ImportCampaign ciblée
+→ événements ImportCampaignOffer CREATED / UPDATED
+→ jobOfferId non nuls et uniques
+→ chargement des JobOffer actuelles
+→ construction standardisée des candidates RAG
+→ lecture des RagDocumentEmbedding existants
+→ comparaison du titre, du contenu, des métadonnées et du modèle
+→ plan CREATE / UPDATE / UP_TO_DATE
+→ sélection bornée
+→ dry-run ou exécution explicite
+→ bilan par document et bilan global
+```
+
+Éléments ajoutés :
+
+- fonction pure de sélection des offres d’une campagne ;
+- conservation exclusive des actions `CREATED` et `UPDATED` ;
+- suppression des `jobOfferId` nuls ;
+- déduplication avec conservation de l’ordre de première apparition ;
+- fonction commune `buildJobOfferRagCandidate()` pour produire le titre, le contenu, les métadonnées et le modèle attendus ;
+- centralisation du modèle `text-embedding-3-small` ;
+- type partagé de métadonnées RAG basé sur `Record<string, unknown>` ;
+- validation des valeurs JSON Prisma à la frontière de la couche métier ;
+- fonction pure de construction du plan de synchronisation ;
+- raisons explicites `DOCUMENT_MISSING`, `CONTENT_CHANGED`, `TITLE_CHANGED`, `METADATA_CHANGED` et `MODEL_CHANGED` ;
+- preview Prisma d’une campagne précise ;
+- détection des offres locales manquantes ;
+- limites séparées `maxDocuments` et `maxEmbeddings` ;
+- persistance d’un embedding déjà généré séparée de l’appel OpenAI ;
+- mise à jour du titre, du contenu non vectorisé et des métadonnées sans nouvel embedding lorsque le vecteur reste valide ;
+- exécuteur réutilisable `executeCampaignRagSync()` ;
 - dry-run par défaut ;
-- aucun appel OpenAI sans flag explicite ;
-- limite maximale par run ;
-- déduplication des `jobOfferId` ;
-- indexation seulement du batch ciblé ;
-- rapport des succès, ignorés et erreurs ;
-- préparation d’une fonction réutilisable par le futur workflow automatique.
+- erreurs isolées par offre afin de ne pas bloquer tout le batch ;
+- bilan des créations, mises à jour, embeddings générés et erreurs ;
+- scripts CLI de preview et de synchronisation.
+
+Classification du plan :
+
+```txt
+CREATE
+→ aucun RagDocumentEmbedding pour sourceType = job_offer et sourceId = jobOffer.id
+→ nouvel embedding requis
+
+UPDATE
+→ document existant mais différent
+→ nouvel embedding seulement si le contenu ou le modèle change
+→ mise à jour SQL légère si seuls le titre ou les métadonnées changent
+
+UP_TO_DATE
+→ document identique
+→ aucune écriture
+→ aucun appel OpenAI
+```
+
+Commandes :
+
+```bash
+npm run rag:campaign:preview -- --campaign-id=<IMPORT_CAMPAIGN_ID>
+
+npm run rag:campaign:sync --   --campaign-id=<IMPORT_CAMPAIGN_ID>   --max-documents=10   --max-embeddings=5
+
+npm run rag:campaign:sync --   --campaign-id=<IMPORT_CAMPAIGN_ID>   --execute   --max-documents=10   --max-embeddings=5
+```
+
+Comportement :
+
+- `rag:campaign:preview` affiche le plan complet sans appel OpenAI et sans écriture ;
+- `rag:campaign:sync` reste en dry-run sans `--execute` ;
+- `--execute` est obligatoire pour générer des embeddings ou modifier l’index ;
+- `--max-documents` limite le nombre total de documents modifiés ;
+- `--max-embeddings` limite le nombre d’appels d’embedding ;
+- une mise à jour légère peut être exécutée avec `--max-embeddings=0` ;
+- les campagnes d’import `dryRun` sont refusées en exécution réelle ;
+- seuls les statuts de campagne `SUCCESS` et `PARTIAL` sont exécutables ;
+- une relance sur des documents déjà synchronisés produit un no-op.
+
+Validation réelle réalisée sur une campagne de 74 offres :
+
+```txt
+Preview initial
+→ 74 offres sélectionnées
+→ 74 offres retrouvées
+→ 0 offre manquante
+→ 73 CREATE
+→ 1 UPDATE de métadonnées
+→ 73 embeddings nécessaires
+
+Premier run réel borné
+→ max-documents=2
+→ max-embeddings=2
+→ 2 documents créés
+→ 2 embeddings de 1536 dimensions
+→ 0 erreur
+
+Relance
+→ les 2 documents créés deviennent UP_TO_DATE
+
+Mise à jour légère
+→ max-embeddings=0
+→ métadonnées mises à jour
+→ aucun appel OpenAI
+→ document ensuite UP_TO_DATE
+```
+
+Tests ajoutés :
+
+- sélection `CREATED` / `UPDATED`, nulls, déduplication et ordre stable ;
+- construction du plan `CREATE` / `UPDATE` / `UP_TO_DATE` ;
+- égalité des métadonnées indépendante de l’ordre des propriétés JSON ;
+- construction standardisée d’une candidate RAG ;
+- limites documents et embeddings ;
+- dry-run sans appel OpenAI ni écriture ;
+- création avec embedding ;
+- mise à jour sans embedding ;
+- poursuite après une erreur sur une offre ;
+- refus des campagnes dry-run ou non exécutables ;
+- no-op pour un plan entièrement à jour.
+
+Décision d’architecture :
+
+```txt
+Import et synchronisation RAG
+= responsabilités séparées dans le code
+
+Workflow quotidien futur
+= étapes enchaînées automatiquement par un même orchestrateur
+```
+
+L’indexation RAG n’est donc pas exécutée dans chaque `upsert` de `JobOffer`. Une panne OpenAI ne doit pas faire échouer l’import. Le `campaignId` constitue la frontière entre les deux étapes et permet de relancer uniquement la synchronisation RAG si nécessaire.
+
+Limites volontaires à la fin du module 25 :
+
+- la synchronisation RAG doit encore être lancée manuellement après une campagne ;
+- aucun historique persistant des exécutions RAG n’est encore stocké en base ;
+- les offres supprimées ne provoquent pas encore le nettoyage automatique de leurs documents RAG ;
+- l’ancien index `JobOfferEmbedding` existe encore ;
+- l’ancien script global d’indexation reste un outil de maintenance, mais le futur workflow quotidien devra utiliser `executeCampaignRagSync()`.
+
+---
+
+## Prochains modules
 
 ### Module 26 — V2 : mise en production, cron et automatisation quotidienne
 
@@ -2389,12 +2567,23 @@ npm run rag:index-profile-documents
 npm run rag:check-documents
 ```
 
-Utilisation recommandée après de nouveaux imports d’offres :
+Utilisation recommandée après une campagne d’import :
 
 ```bash
-npm run rag:index-job-offer-documents
+npm run rag:campaign:preview -- --campaign-id=<IMPORT_CAMPAIGN_ID>
+
+npm run rag:campaign:sync --   --campaign-id=<IMPORT_CAMPAIGN_ID>   --max-documents=10   --max-embeddings=5
+
+npm run rag:campaign:sync --   --campaign-id=<IMPORT_CAMPAIGN_ID>   --execute   --max-documents=10   --max-embeddings=5
+
 npm run rag:check-documents
 ```
+
+La première commande affiche le plan complet. La deuxième applique les limites mais reste en dry-run. La troisième autorise explicitement les écritures et les appels d’embedding.
+
+L’import et la synchronisation RAG restent séparés : lancer une campagne depuis `/imports` ne déclenche pas encore automatiquement le RAG. Le module 26 enchaînera ces deux fonctions dans un workflow quotidien unique.
+
+Le script `rag:index-job-offer-documents` reste disponible comme outil manuel ou historique d’indexation globale. La synchronisation par campagne est la voie recommandée pour les nouveaux imports.
 
 Les scripts de test acceptent une question en argument CLI :
 
@@ -2492,6 +2681,12 @@ Le projet respecte plusieurs règles :
 - afficher les tokens consommés ;
 - estimer le coût des requêtes IA ;
 - contrôler le volume d’embeddings générés pour le RAG ;
+- cibler explicitement une campagne avec `--campaign-id` pour synchroniser les offres ;
+- garder la synchronisation RAG en dry-run sans `--execute` ;
+- limiter séparément les documents modifiés avec `--max-documents` et les appels d’embedding avec `--max-embeddings` ;
+- ne pas recalculer un embedding lorsque le document est déjà à jour ou lorsque seules les métadonnées changent ;
+- refuser l’exécution RAG sur une campagne d’import dry-run ou non terminée correctement ;
+- isoler les erreurs par offre afin qu’un échec OpenAI ne bloque pas toute la synchronisation ;
 - privilégier des documents Markdown versionnés pour le profil/CV plutôt qu’un parsing PDF fragile au début ;
 - ne pas scraper agressivement des sources sensibles ;
 - ne pas contourner de protections anti-bot ;
@@ -2600,6 +2795,9 @@ git commit -m "feat(imports): add detailed campaign audit UI"
 
 git add .
 git commit -m "feat(reporting): link email digest to campaign detail"
+
+git add .
+git commit -m "feat(rag): sync embeddings from import campaigns"
 ```
 
 ---
@@ -2650,6 +2848,12 @@ JobRadar IA permet d’expliquer :
 - comment intégrer un CV Markdown et du lore profil dans un RAG existant ;
 - pourquoi utiliser `profile_document` comme type de source distinct ;
 - comment afficher des sources RAG mixtes dans l’interface ;
+- comment synchroniser un index vectoriel à partir d’une campagne métier sans réindexer toute la base ;
+- comment construire un plan `CREATE` / `UPDATE` / `UP_TO_DATE` avant tout appel OpenAI ;
+- pourquoi séparer import, génération d’embedding et persistance ;
+- comment limiter distinctement les écritures et les appels payants ;
+- comment rendre une synchronisation idempotente et relançable après un échec partiel ;
+- pourquoi enchaîner import et RAG dans un orchestrateur plutôt que dans chaque upsert ;
 - comment préparer une application IA sérieuse avec contrôle humain.
 
 ---
@@ -2672,7 +2876,9 @@ Limites connues :
 - les documents profil/CV sont indexés en bloc, sans chunking par section ;
 - il n’y a pas encore d’upload UI, de parsing PDF ou de gestion avancée des documents profil ;
 - l’ancien index `JobOfferEmbedding` existe encore comme héritage V1 ;
-- l’indexation RAG des nouvelles offres doit encore être déclenchée manuellement après import ;
+- la synchronisation RAG par campagne existe, mais elle doit encore être déclenchée manuellement après import ;
+- le lancement d’une campagne depuis `/imports` n’appelle pas encore automatiquement `executeCampaignRagSync()` ;
+- les exécutions de synchronisation RAG ne sont pas encore historisées dans une table dédiée ;
 - le nettoyage DB des offres peu pertinentes ne nettoie pas automatiquement les documents RAG associés ;
 - les localisations custom ne sont pas encore sauvegardées dans un scénario ;
 - les inputs custom par actor ne sont pas encore exposés dans l’UI ;
@@ -2688,7 +2894,7 @@ Limites connues :
 - la génération de brouillons de candidature n’est pas encore implémentée ;
 - aucune candidature n’est envoyée automatiquement et aucun recruteur n’est contacté automatiquement.
 
-Ces limites structurent les modules 25 à 29 : synchronisation RAG, mise en production et cron, brouillon de candidature, consolidation technique puis clôture portfolio.
+Ces limites structurent les modules 26 à 29 : mise en production et cron, brouillon de candidature, consolidation technique puis clôture portfolio.
 
 ---
 
@@ -2696,4 +2902,4 @@ Ces limites structurent les modules 25 à 29 : synchronisation RAG, mise en prod
 
 Projet personnel pédagogique et portfolio.
 
-Les données utilisées dans les premiers modules sont fictives ou contrôlées. Les imports externes et actors Apify sont utilisés avec prudence, dans une logique d’apprentissage, de traçabilité et de co
+Les données utilisées dans les premiers modules sont fictives ou contrôlées. Les imports externes et actors Apify sont utilisés avec prudence, dans une logique d’apprentissage, de traçabilité et de contrôle des coûts et des usages.

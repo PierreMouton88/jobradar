@@ -1,7 +1,9 @@
-import { embed } from "ai";
 import { openai } from "@ai-sdk/openai";
+import { embed } from "ai";
 
-const EMBEDDING_MODEL = openai.embeddingModel("text-embedding-3-small");
+import { RAG_EMBEDDING_MODEL_NAME } from "@/lib/rag/rag-embedding-config";
+
+const EMBEDDING_MODEL = openai.embeddingModel(RAG_EMBEDDING_MODEL_NAME);
 
 export async function generateEmbedding(text: string): Promise<number[]> {
   if (!text.trim()) {

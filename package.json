@@ -31,6 +31,8 @@
     "rag:index-job-offer-documents": "tsx scripts/index-job-offers-rag-documents.ts",
     "rag:preview-profile-documents": "tsx scripts/preview-profile-documents.ts",
     "rag:index-profile-documents": "tsx scripts/index-profile-documents.ts",
+    "rag:campaign:preview": "tsx scripts/preview-campaign-rag-sync.ts",
+    "rag:campaign:sync": "tsx scripts/sync-campaign-rag.ts",
     "agent:test:search": "tsx scripts/test-agent-search-offers.ts",
     "agent:test:details": "tsx scripts/test-agent-get-offer-details.ts",
     "agent:test": "tsx scripts/test-job-agent.ts",

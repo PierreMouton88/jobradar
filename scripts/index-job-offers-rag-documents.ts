@@ -1,4 +1,5 @@
 import { prisma } from "@/lib/prisma";
+import { buildJobOfferRagCandidate } from "@/lib/rag/build-job-offer-rag-candidate";
 import { createRagDocumentEmbedding } from "@/lib/rag/create-rag-document-embedding";
 import { buildJobOfferRagDocument } from "@/lib/rag/job-offer-rag-document";
 
@@ -44,24 +45,14 @@ async function main() {
         : null,
     });
 
+    const candidate = buildJobOfferRagCandidate(offer);
+
     const result = await createRagDocumentEmbedding({
       sourceType: "job_offer",
-      sourceId: offer.id,
-      title: offer.company
-        ? `${offer.title} — ${offer.company}`
-        : offer.title,
-      content,
-      metadata: {
-        jobOfferId: offer.id,
-        title: offer.title,
-        company: offer.company,
-        location: offer.location,
-        contractType: offer.contractType,
-        remote: offer.remote,
-        source: offer.source,
-        url: offer.url,
-        hasAnalysis: Boolean(offer.analysis),
-      },
+      sourceId: candidate.sourceId,
+      title: candidate.title,
+      content: candidate.content,
+      metadata: candidate.metadata,
     });
 
     console.log(
