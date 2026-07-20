@@ -26,6 +26,9 @@ L’objectif est de construire progressivement une application capable de :
 - générer un rapport de veille basé sur le dernier batch réel plutôt que seulement sur une fenêtre temporelle ;
 - générer un rapport complet de campagne pour auditer toutes les offres créées, mises à jour, rejetées ou en erreur ;
 - afficher dans `/offers` un scoring et une priorité plus explicables, avec points positifs et points de vigilance.
+- consulter l’audit complet d’une campagne depuis `/imports/[campaignId]`, avec runs, offres créées, mises à jour, rejetées et erreurs ;
+- trier les offres d’une campagne par score de compatibilité actuel tout en distinguant ce score de la qualité technique des données ;
+- ouvrir directement le rapport complet d’une campagne depuis le digest email.
 
 Le projet avance module par module afin de rester compréhensible, maintenable et explicable en entretien.
 
@@ -36,6 +39,8 @@ Le projet avance module par module afin de rester compréhensible, maintenable e
 La V1 de JobRadar IA est terminée. Elle a construit une base pédagogique complète.
 
 La V2 est en cours. Elle transforme progressivement cette base en outil personnel de veille automatisée d’offres d’emploi.
+
+La prochaine phase vise à fermer la boucle opérationnelle : synchronisation RAG par campagne, mise en production, cron quotidien et automatisation bornée du workflow de veille.
 
 Vision V2 :
 
@@ -61,6 +66,9 @@ sources réalistes / exports externes / actors Apify
 → historique persistant ImportCampaign / ImportCampaignRun / ImportCampaignOffer
 → rapport Markdown scoped sur le dernier batch réel
 → rapport complet d’audit de campagne
+→ page détail `/imports/[campaignId]` avec runs repliables et événements d’offres
+→ tri des offres de campagne par compatibilité actuelle
+→ accès direct au rapport complet depuis le digest email
 → filtrage et tri des offres par priorité dans `/offers`
 → rapport Markdown scoped aux offres récentes
 → analyse IA contrôlée du top d’offres récentes
@@ -98,6 +106,10 @@ Le projet couvre actuellement :
 - liaison entre campagnes, runs, offres créées/mises à jour, rejets de pertinence et erreurs ;
 - rapport Markdown basé sur la dernière campagne réussie ou partielle avec `--latest-campaign` / `--campaign-id=latest` ;
 - rapport complet de campagne avec toutes les offres du batch, créées, mises à jour, rejetées ou en erreur ;
+- page détail `/imports/[campaignId]` pour consulter l’audit complet d’une campagne dans l’UI ;
+- affichage repliable des runs afin de garder la page lisible sur les campagnes multi-sources et multi-localisations ;
+- regroupement des événements par action et tri des offres créées/mises à jour par compatibilité actuelle décroissante ;
+- bouton du digest email vers le rapport complet de campagne dans l’application ;
 - préfiltre de pertinence profil avant import PostgreSQL ;
 - rapport UI des offres acceptées et rejetées par le préfiltre ;
 - script de nettoyage des offres peu pertinentes déjà présentes en base ;
@@ -161,7 +173,9 @@ rapport Markdown de veille global, limité aux offres récentes ou scoped sur le
 ↓
 rapport complet d’audit de campagne si nécessaire
 ↓
-digest email texte/HTML
+consultation UI dans `/imports/[campaignId]` avec runs repliables et offres regroupées
+↓
+digest email texte/HTML avec accès direct au rapport complet de campagne
 ↓
 distribution SMTP contrôlée avec dry-run, --send et provider externe
 ↓
@@ -200,6 +214,9 @@ L’objectif n’est pas seulement d’obtenir une application fonctionnelle, ma
 - comment orchestrer un workflow quotidien avec dry-run, flags explicites, analyse IA limitée et envoi contrôlé ;
 - pourquoi un rapport actionnable et un journal complet de campagne sont deux objets différents ;
 - comment tracer durablement un batch d’import avec des relations Prisma plutôt qu’avec un simple filtre temporel ;
+- comment construire une route dynamique Next.js de détail à partir d’un identifiant de campagne ;
+- comment séparer chargement Prisma, transformations métier testables et rendu Server Component ;
+- comment distinguer score de compatibilité, score de préfiltre et qualité technique des données dans une même interface ;
 - comment relier des offres créées ou mises à jour à une campagne sans casser la déduplication par URL ;
 - comment rendre un scoring plus tolérant aux données manquantes sans perdre l’explicabilité ;
 - comment ajouter des garde-fous autour des appels IA ;
@@ -296,6 +313,8 @@ jobradar-ia/
 │  │  ├─ actions.ts
 │  │  └─ page.tsx
 │  ├─ imports/
+│  │  ├─ [campaignId]/
+│  │  │  └─ page.tsx
 │  │  ├─ actions.ts
 │  │  ├─ ImportCampaignButton.tsx
 │  │  └─ page.tsx
@@ -324,7 +343,10 @@ jobradar-ia/
 │  ├─ cli/
 │  │  └─ read-cli-question.ts
 │  ├─ imports/
-│  │  └─ external-offer-relevance-filter.ts
+│  │  ├─ external-offer-relevance-filter.ts
+│  │  ├─ get-import-campaign-detail.ts
+│  │  ├─ group-import-campaign-offers-by-action.ts
+│  │  └─ sort-import-campaign-offers-by-score.ts
 │  ├─ distribution/
 │  │  ├─ email-smtp-config.ts
 │  │  └─ send-email-with-smtp.ts
@@ -1977,7 +1999,7 @@ Garde-fous conservés :
 - aucun contact recruteur automatisé ;
 - secrets Apify, OpenAI et SMTP côté serveur/scripts uniquement.
 
-Limites volontaires :
+Limites volontaires à la fin du module 23 :
 
 - pas encore de page détail `/imports/[campaignId]` ;
 - pas encore d’onglets UI pour voir toutes les offres créées, mises à jour, rejetées ou en erreur ;
@@ -1988,23 +2010,236 @@ Limites volontaires :
 
 ---
 
+## Module 24 — V2 : détail UI des campagnes et accès depuis le digest
+
+Statut : terminé.
+
+Objectif : rendre le journal persistant d’une campagne directement consultable dans l’application et relier le digest email à cette vue complète.
+
+Avant le module 24 :
+
+```txt
+/imports
+→ historique condensé des campagnes
+
+report:campaign
+→ rapport Markdown complet local
+
+digest email
+→ résumé actionnable
+→ pas d’accès direct à l’audit UI
+```
+
+Après le module 24 :
+
+```txt
+/imports
+→ lien vers /imports/[campaignId]
+→ résumé global de campagne
+→ contexte scénario / profil / sources / localisations
+→ runs repliables
+→ offres créées et mises à jour triées par compatibilité actuelle
+→ offres rejetées avec score et raisons de préfiltre
+→ erreurs de préparation et d’import
+→ liens vers /offers/[id] et vers la source externe
+
+digest email
+→ bouton “Voir le rapport complet”
+→ /imports/[campaignId]
+```
+
+Éléments ajoutés :
+
+- route dynamique `/imports/[campaignId]` ;
+- chargeur serveur `getImportCampaignDetail()` ;
+- sélection Prisma de la campagne, des runs, des événements d’offres, des offres locales et de leur analyse IA ;
+- fonction pure de regroupement des événements par `ImportCampaignOfferAction` ;
+- fonction pure de tri par score de compatibilité décroissant ;
+- tests unitaires du regroupement et du tri ;
+- résumé global et contexte de campagne ;
+- détail des runs avec compteurs, statut, seuil de pertinence et erreurs ;
+- bloc de runs repliable avec `<details>` pour éviter les pages excessivement longues ;
+- sections dédiées aux actions `CREATED`, `UPDATED`, `REJECTED_BY_RELEVANCE`, `PREVIEW_ERROR` et `IMPORT_ERROR` ;
+- distinction explicite entre compatibilité actuelle, qualité des données et score de préfiltre ;
+- lien vers la fiche locale pour les offres importées ;
+- lien vers la source externe lorsqu’elle est disponible ;
+- bouton du digest email vers le rapport complet de campagne ;
+- variable `JOBRADAR_APP_BASE_URL` pour construire les URLs de l’application sans hardcoder `localhost`.
+
+Décisions importantes :
+
+```txt
+ImportCampaignOffer
+= photographie de l’événement pendant le batch
+
+JobOffer
+= état actuel de l’offre dans la base
+
+compatibilité actuelle
+= score recalculé avec le profil et l’analyse IA actuellement disponibles
+
+relevanceScore
+= score du préfiltre avant import
+
+qualityScore
+= qualité technique des données
+```
+
+Les offres créées et mises à jour sont triées par compatibilité actuelle dans leur propre section. Les offres rejetées conservent leur score de préfiltre, car elles ne possèdent pas nécessairement de `JobOffer` locale.
+
+Le digest reste volontairement court. Le bouton vers `/imports/[campaignId]` permet d’accéder à l’audit exhaustif sans transformer l’email en rapport complet.
+
+Validation réalisée :
+
+```txt
+/imports
+→ ouverture d’une campagne depuis l’historique
+
+/imports/[campaignId]
+→ compteurs cohérents avec ImportCampaign
+→ runs et erreurs visibles
+→ offres regroupées par action
+→ offres créées/mises à jour triées par compatibilité
+→ offre rejetée visible avec raisons
+→ identifiant inexistant renvoyé vers la 404
+
+digest email
+→ bouton vers le rapport complet de la campagne
+```
+
+Garde-fous conservés :
+
+- aucune candidature automatisée ;
+- aucun contact recruteur automatisé ;
+- aucun appel IA supplémentaire pour afficher la page : le score est recalculé depuis les données déjà stockées ;
+- aucune exposition de secret côté client ;
+- l’URL publique reste configurée par variable d’environnement.
+
+---
+
 ## Prochains modules
 
-### Module 24 — À cadrer
+### Module 25 — V2 : synchronisation RAG contrôlée par campagne
 
 Statut : à venir.
 
-Pistes possibles :
+Objectif : maintenir `RagDocumentEmbedding` synchronisé avec les offres créées ou mises à jour pendant une campagne, sans réindexer inutilement toute la base.
 
-- créer une page détail `/imports/[campaignId]` pour consulter l’audit de campagne dans l’UI ;
-- ajouter une indexation RAG post-import contrôlée pour les nouvelles offres du batch ;
-- historiser les emails envoyés et les rapports générés ;
-- ajouter un déclenchement UI contrôlé du daily report ;
-- gérer les profils et scénarios depuis l’interface ;
-- préparer une démo portfolio plus compacte.
+Périmètre prévu :
 
+```txt
+ImportCampaign
+→ ImportCampaignOffer CREATED / UPDATED
+→ jobOfferId uniques
+→ comparaison avec les documents RAG existants
+→ preview des créations / mises à jour / éléments déjà à jour
+→ génération d’embeddings avec limite et flag explicite
+→ upsert RagDocumentEmbedding
+→ bilan d’exécution
+```
+
+Garde-fous prévus :
+
+- dry-run par défaut ;
+- aucun appel OpenAI sans flag explicite ;
+- limite maximale par run ;
+- déduplication des `jobOfferId` ;
+- indexation seulement du batch ciblé ;
+- rapport des succès, ignorés et erreurs ;
+- préparation d’une fonction réutilisable par le futur workflow automatique.
+
+### Module 26 — V2 : mise en production, cron et automatisation quotidienne
+
+Statut : à venir.
+
+Objectif : transformer les briques déjà contrôlées en workflow quotidien réellement utile, déployé et planifié.
+
+Workflow cible :
+
+```txt
+cron quotidien
+→ lancer une campagne Apify configurée
+→ attendre et persister les runs
+→ synchroniser le RAG sur le batch
+→ sélectionner un nombre limité de candidates IA
+→ lancer les analyses autorisées
+→ générer le rapport scoped sur la campagne
+→ envoyer le digest email
+→ fournir le lien public vers /imports/[campaignId]
+```
+
+Travaux prévus :
+
+- déploiement de l’application Next.js ;
+- base PostgreSQL managée compatible pgvector ;
+- configuration sécurisée des secrets OpenAI, Apify, SMTP et base ;
+- URL publique via `JOBRADAR_APP_BASE_URL` ;
+- choix d’un ordonnanceur cron adapté au workflow ;
+- extraction du daily en fonction/service appelable sans dépendre uniquement du CLI ;
+- limites configurées pour Apify, OpenAI et embeddings ;
+- verrou anti-chevauchement pour éviter deux runs simultanés ;
+- idempotence pour éviter les doubles imports, doubles analyses et doubles emails ;
+- journalisation du résultat de chaque exécution ;
+- stratégie d’échec partiel et possibilité de relance ;
+- premier déploiement en mode prudent avant activation complète.
+
+Décision de sécurité à préparer : le cron ne pourra pas saisir manuellement `--run-ai`, `--send` ou `--run-actor`. Ces autorisations devront devenir une configuration serveur explicite, bornée et désactivable, avec des limites strictes par exécution.
+
+### Module 27 — V2 : brouillon de candidature assisté
+
+Statut : à venir.
+
+Objectif : produire un brouillon personnalisable à partir d’une offre, du profil structuré, du CV et du lore candidat.
+
+Périmètre prévu :
+
+```txt
+offre sélectionnée
++ analyse de l’offre
++ profil candidat
++ passages CV / lore récupérés par RAG
+→ brouillon de message ou lettre
+→ sources et arguments utilisés
+→ relecture et modification humaines
+→ aucun envoi automatique
+```
+
+Le module ne construira pas de mini-CRM et ne contactera aucun recruteur automatiquement.
+
+### Module 28 — V2 : nettoyage technique et consolidation
+
+Statut : à venir.
+
+Pistes prévues :
+
+- déprécier ou supprimer l’ancien index `JobOfferEmbedding` après vérification ;
+- nettoyer les documents RAG associés aux offres supprimées ;
+- réduire les duplications de mapping/scoring ;
+- corriger les avertissements restants ;
+- vérifier les scripts historiques devenus redondants ;
+- consolider les tests d’intégration des workflows critiques ;
+- documenter les procédures de reprise et de maintenance.
+
+### Module 29 — V2 : clôture portfolio et démonstration
+
+Statut : à venir.
+
+Objectif : figer une version stable, démontrable et explicable.
+
+Livrables prévus :
+
+- README final plus compact ;
+- schéma d’architecture à jour ;
+- captures d’écran principales ;
+- scénario de démonstration reproductible ;
+- description des choix techniques et des garde-fous ;
+- métriques de tests et de qualité ;
+- limites connues ;
+- pistes V3 ;
+- merge vers `main` et tag de version stable.
 
 ---
+
 
 ## Pages disponibles
 
@@ -2014,7 +2249,8 @@ Pistes possibles :
 - `/data-quality` : qualité technique des données.
 - `/profile` : profil candidat actuel.
 - `/rag` : interface RAG profil-aware utilisant le profil candidat, les documents profil/CV Markdown et les offres indexées.
-- `/imports` : pilotage des campagnes Apify, sélection des sources/localisations, lancement côté serveur, préfiltre profil, rapport de campagne et historique persistant des dernières campagnes.
+- `/imports` : pilotage des campagnes Apify, sélection des sources/localisations, lancement côté serveur, préfiltre profil et historique persistant des campagnes.
+- `/imports/[campaignId]` : audit complet d’une campagne avec résumé, contexte, runs repliables, offres regroupées par action, compatibilité actuelle, raisons de rejet et erreurs.
 - `/agent` : agent avec tools contrôlés.
 - `/fake-dynamic-jobs` : page locale de test Playwright.
 
@@ -2201,6 +2437,7 @@ Comportement :
 - `--run-ai` est obligatoire pour lancer des appels OpenAI ;
 - `--send` est obligatoire pour envoyer un email réel ;
 - `report:campaign` génère le rapport complet d’audit d’une campagne, avec offres créées, mises à jour, rejetées et erreurs.
+- le digest HTML peut afficher un bouton vers `/imports/[campaignId]` lorsque `JOBRADAR_APP_BASE_URL` et l’identifiant de campagne sont disponibles.
 
 ---
 
@@ -2220,6 +2457,7 @@ SMTP_USER="your_brevo_smtp_login"
 SMTP_PASSWORD="your_brevo_smtp_key"
 REPORT_EMAIL_FROM="verified-sender@example.com"
 REPORT_EMAIL_TO="you@example.com"
+JOBRADAR_APP_BASE_URL="http://localhost:3000"
 ```
 
 Règles :
@@ -2228,6 +2466,7 @@ Règles :
 - ne jamais exposer `OPENAI_API_KEY` côté client ;
 - ne jamais exposer `APIFY_TOKEN` côté client ;
 - ne jamais exposer les identifiants SMTP côté client ;
+- configurer `JOBRADAR_APP_BASE_URL` avec l’URL publique après déploiement afin que les liens des emails soient accessibles hors de la machine locale ;
 - utiliser une clé SMTP Brevo, pas le mot de passe du compte Brevo ;
 - garder les appels OpenAI, Apify et SMTP côté serveur/scripts.
 
@@ -2270,6 +2509,7 @@ Le projet respecte plusieurs règles :
 - garder les futures actions d’agent sous contrôle humain ;
 - ne pas automatiser les candidatures ;
 - ne pas contacter automatiquement de recruteur.
+- avant activation du cron, remplacer les autorisations manuelles du CLI par une configuration serveur explicite avec budgets, limites, verrou anti-chevauchement et journalisation ;
 
 ---
 
@@ -2354,6 +2594,12 @@ git commit -m "feat(imports): persist import campaign history"
 
 git add .
 git commit -m "feat(reports): add full import campaign report"
+
+git add .
+git commit -m "feat(imports): add detailed campaign audit UI"
+
+git add .
+git commit -m "feat(reporting): link email digest to campaign detail"
 ```
 
 ---
@@ -2393,6 +2639,9 @@ JobRadar IA permet d’expliquer :
 - pourquoi remplacer un filtre temporel par un identifiant de campagne pour auditer un batch ;
 - comment modéliser une campagne d’import avec `ImportCampaign`, `ImportCampaignRun` et `ImportCampaignOffer` ;
 - comment distinguer digest actionnable, rapport de veille et rapport complet d’audit ;
+- comment exposer un journal de batch dans une route dynamique Next.js ;
+- comment préparer un modèle de vue serveur avec regroupement et tri testables ;
+- comment relier un digest email à une page d’audit persistante ;
 - comment prioriser des offres avec des règles déterministes ;
 - comment contrôler des appels IA batch avec dry-run, limite et flag explicite ;
 - comment fonctionne un RAG avec embeddings et pgvector ;
@@ -2407,39 +2656,39 @@ JobRadar IA permet d’expliquer :
 
 ## Limites actuelles
 
-Le projet reste pédagogique et personnel.
+Le projet reste pédagogique et personnel, même s’il commence à devenir un outil quotidien exploitable.
 
 Limites connues :
 
 - les imports réels dépendent des actors et exports externes ;
 - un actor Apify ne rend pas automatiquement une source juridiquement autorisée ;
-- les mappers doivent être maintenus source par source ;
-- les adapters Apify doivent aussi être maintenus source par source ;
-- les requêtes larges comme `développeur web` produisent du volume mais aussi beaucoup de bruit, même si le préfiltre en réduit une partie ;
+- les mappers et adapters doivent être maintenus source par source ;
+- les requêtes larges comme `développeur web` produisent encore du bruit, même si le préfiltre en réduit une partie ;
 - LinkedIn peut interpréter certaines localisations différemment, par exemple `Metz` peut retourner 0 alors que `Metz, Grand Est` fonctionne ;
 - le scoring côté UI dépend encore partiellement d’un profil TypeScript historique ;
-- les profils/scénarios sont en base, mais leur UI de gestion reste à construire ;
-- l’analyse IA contrôlée existe en CLI, mais n’a pas encore d’interface dédiée ;
+- les profils et scénarios sont en base, mais leur UI de gestion reste à construire ;
+- l’analyse IA contrôlée existe en CLI et sur la fiche d’offre, mais ne possède pas encore de workflow UI dédié ;
 - l’estimation de coût avant appel IA reste indicative ;
-- le RAG générique indexe le profil structuré, les documents Markdown de profil/CV et des offres ;
-- les documents profil/CV sont indexés en bloc, sans chunking par section pour le moment ;
+- les documents profil/CV sont indexés en bloc, sans chunking par section ;
 - il n’y a pas encore d’upload UI, de parsing PDF ou de gestion avancée des documents profil ;
-- l’ancien index `JobOfferEmbedding` existe encore comme héritage V1 et pourra être déprécié plus tard ;
-- l’indexation RAG des nouvelles offres doit encore être lancée manuellement après import ;
-- l’UI de pilotage des imports affiche maintenant un historique des dernières campagnes, mais pas encore une page détail `/imports/[campaignId]` ;
-- les localisations custom sont saisies manuellement et ne sont pas encore sauvegardées dans un scénario ;
+- l’ancien index `JobOfferEmbedding` existe encore comme héritage V1 ;
+- l’indexation RAG des nouvelles offres doit encore être déclenchée manuellement après import ;
+- le nettoyage DB des offres peu pertinentes ne nettoie pas automatiquement les documents RAG associés ;
+- les localisations custom ne sont pas encore sauvegardées dans un scénario ;
 - les inputs custom par actor ne sont pas encore exposés dans l’UI ;
-- le lancement multi-localisations fonctionne, mais un mode asynchrone pourra être nécessaire en cas de déploiement avec timeouts ;
-- les offres rejetées par le préfiltre sont persistées dans `ImportCampaignOffer`, mais elles ne sont pas encore consultables dans une vue UI détaillée ;
-- le nettoyage DB des offres peu pertinentes ne nettoie pas encore automatiquement les documents RAG associés ;
-- la distribution email existe en CLI, mais elle n’est pas encore planifiée automatiquement ;
+- le lancement multi-localisations fonctionne, mais un mode asynchrone ou un worker pourra être nécessaire après déploiement pour éviter les timeouts ;
 - les emails envoyés ne sont pas encore historisés en base ;
-- les rapports complets de campagne sont générés en Markdown local, pas encore attachés au mail ni stockés comme entités dédiées ;
-- le daily report peut maintenant utiliser la dernière campagne persistée, mais le mode `--recent-hours` reste disponible pour les usages historiques ;
-- les liens du digest pointent encore vers l’application locale (`localhost`) ;
-- la délivrabilité Brevo peut nécessiter une configuration sender/domaine plus robuste pour un usage hors test.
+- les rapports Markdown ne sont pas stockés comme entités dédiées ;
+- l’application et PostgreSQL ne sont pas encore déployés sur une infrastructure persistante ;
+- le daily report n’est pas encore planifié automatiquement ;
+- aucune protection contre le chevauchement de deux workflows automatiques n’existe encore ;
+- les autorisations CLI `--run-actor`, `--run-ai` et `--send` devront être adaptées avec prudence pour un cron serveur ;
+- les liens du digest ne sont accessibles hors de la machine locale qu’après configuration d’une URL publique dans `JOBRADAR_APP_BASE_URL` ;
+- la délivrabilité SMTP peut nécessiter une configuration sender, domaine et DNS plus robuste ;
+- la génération de brouillons de candidature n’est pas encore implémentée ;
+- aucune candidature n’est envoyée automatiquement et aucun recruteur n’est contacté automatiquement.
 
-Ces limites sont volontaires : le projet avance module par module.
+Ces limites structurent les modules 25 à 29 : synchronisation RAG, mise en production et cron, brouillon de candidature, consolidation technique puis clôture portfolio.
 
 ---
 
@@ -2447,4 +2696,4 @@ Ces limites sont volontaires : le projet avance module par module.
 
 Projet personnel pédagogique et portfolio.
 
-Les données utilisées dans les premiers modules sont fictives ou contrôlées. Les imports externes et actors Apify sont utilisés avec prudence, dans une logique d’apprentissage, de traçabilité et de contrôle des coûts.
+Les données utilisées dans les premiers modules sont fictives ou contrôlées. Les imports externes et actors Apify sont utilisés avec prudence, dans une logique d’apprentissage, de traçabilité et de co
