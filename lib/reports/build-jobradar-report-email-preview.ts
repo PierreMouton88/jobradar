@@ -2,11 +2,17 @@ import type { LatestJobRadarReport } from "./read-latest-jobradar-report";
 
 export type JobRadarReportEmailPreview = {
   subject: string;
-  body: string; // Alias conservé pour compatibilité avec les scripts existants.
+  body: string;
   text: string;
   html: string;
   sourceReportPath: string;
   sourceReportFilename: string;
+  campaignReportUrl: string | null;
+};
+
+export type BuildJobRadarReportEmailPreviewOptions = {
+  appBaseUrl?: string | null;
+  campaignId?: string | null;
 };
 
 type PriorityOfferDigest = {
@@ -155,6 +161,48 @@ function parseSummaryItems(lines: string[]): SummaryItem[] {
 
 function getSummaryValue(items: SummaryItem[], label: string): string | null {
   return items.find((item) => item.label === label)?.value ?? null;
+}
+
+function normalizeAppBaseUrl(value: string | null | undefined): string | null {
+  const normalizedValue = value?.trim();
+
+  if (!normalizedValue) {
+    return null;
+  }
+
+  return normalizedValue.replace(/\/+$/, "");
+}
+
+function extractCampaignIdFromSummary(
+  summaryItems: SummaryItem[],
+): string | null {
+  const reportMode = getSummaryValue(summaryItems, "Mode rapport");
+
+  if (!reportMode) {
+    return null;
+  }
+
+  const campaignIdMatch = reportMode.match(/\b(c[a-z0-9]{20,})\b/i);
+
+  return campaignIdMatch?.[1] ?? null;
+}
+
+function buildCampaignReportUrl(input: {
+  appBaseUrl?: string | null;
+  campaignId?: string | null;
+  summaryItems: SummaryItem[];
+}): string | null {
+  const appBaseUrl = normalizeAppBaseUrl(input.appBaseUrl);
+
+  const campaignId =
+    input.campaignId?.trim() ||
+    extractCampaignIdFromSummary(input.summaryItems);
+
+  if (!appBaseUrl || !campaignId) {
+    return null;
+  }
+
+  return `${appBaseUrl}/imports/${encodeURIComponent(campaignId)}`;
 }
 
 function parsePrioritySections(lines: string[]): PrioritySectionDigest[] {
@@ -655,6 +703,50 @@ function buildQualityHtml(qualityLines: string[]): string {
   `;
 }
 
+function buildCompleteReportHtml(input: {
+  campaignReportUrl: string | null;
+  reportFilename: string;
+}): string {
+  if (!input.campaignReportUrl) {
+    return `
+      <p style="margin:0 0 10px;font-size:14px;line-height:21px;color:#334155;">
+        <strong>Rapport complet :</strong>
+        reports/${escapeHtml(input.reportFilename)}
+      </p>
+    `;
+  }
+
+  return `
+    <div style="margin:0 0 16px;">
+      <a
+        href="${escapeHtml(input.campaignReportUrl)}"
+        target="_blank"
+        style="
+          display:inline-block;
+          background:#4f46e5;
+          color:#ffffff;
+          text-decoration:none;
+          border-radius:10px;
+          padding:12px 18px;
+          font-size:14px;
+          line-height:20px;
+          font-weight:700;
+        "
+      >
+        Voir le rapport complet
+      </a>
+    </div>
+
+    <p style="margin:0 0 10px;font-size:13px;line-height:20px;color:#64748b;">
+      Ouvre le détail persistant de la campagne dans JobRadar IA.
+    </p>
+
+    <p style="margin:0 0 10px;font-size:12px;line-height:18px;color:#94a3b8;">
+      Rapport source : ${escapeHtml(input.reportFilename)}
+    </p>
+  `;
+}
+
 function buildHtmlEmail(input: {
   reportDate: string;
   summaryItems: SummaryItem[];
@@ -662,6 +754,7 @@ function buildHtmlEmail(input: {
   aiAnalysisOffers: PriorityOfferDigest[];
   qualityLines: string[];
   reportFilename: string;
+  campaignReportUrl: string | null;
 }): string {
   return `<!doctype html>
 <html lang="fr">
@@ -725,9 +818,10 @@ function buildHtmlEmail(input: {
 
             <tr>
               <td style="background:#ffffff;border:1px solid #e2e8f0;border-top:0;border-radius:0 0 22px 22px;padding:22px 24px;">
-                <p style="margin:0 0 10px;font-size:14px;line-height:21px;color:#334155;">
-                  <strong>Rapport complet :</strong> reports/${escapeHtml(input.reportFilename)}
-                </p>
+                ${buildCompleteReportHtml({
+                  campaignReportUrl: input.campaignReportUrl,
+                  reportFilename: input.reportFilename,
+                })}
                 <p style="margin:0;font-size:13px;line-height:20px;color:#64748b;">
                   Aucune candidature n’a été envoyée. Aucun contact externe n’a été effectué.
                 </p>
@@ -743,6 +837,7 @@ function buildHtmlEmail(input: {
 
 export function buildJobRadarReportEmailPreview(
   report: LatestJobRadarReport,
+  options: BuildJobRadarReportEmailPreviewOptions = {},
 ): JobRadarReportEmailPreview {
   const reportDate = getReportDate(report.content);
 
@@ -759,10 +854,10 @@ export function buildJobRadarReportEmailPreview(
   const prioritySections = parsePrioritySections(priorityLines);
 
   const topPriorityOffers = getOffersFromSections(
-  prioritySections,
-  ["très prometteuses", "intéressantes", "à surveiller"],
-  5,
-);
+    prioritySections,
+    ["très prometteuses", "intéressantes", "à surveiller"],
+    5,
+  );
   const aiAnalysisOffers = getOffersFromSections(
     prioritySections,
     ["à analyser avec ia"],
@@ -771,7 +866,11 @@ export function buildJobRadarReportEmailPreview(
 
   const compactSummaryLines = buildCompactSummaryLines(summaryLines);
   const summaryItems = parseSummaryItems(compactSummaryLines);
-
+  const campaignReportUrl = buildCampaignReportUrl({
+  appBaseUrl: options.appBaseUrl,
+  campaignId: options.campaignId,
+  summaryItems,
+});
   const subject = `JobRadar IA — Digest de veille du ${reportDate}`;
 
   const textLines = [
@@ -805,7 +904,9 @@ export function buildJobRadarReportEmailPreview(
     "",
     "Rapport complet",
     "---------------",
-    `Fichier local : reports/${report.filename}`,
+    ...(campaignReportUrl
+      ? [`Ouvrir le rapport : ${campaignReportUrl}`]
+      : [`Fichier local : reports/${report.filename}`]),
     "",
     "Aucune candidature n’a été envoyée.",
     "Aucun contact externe n’a été effectué.",
@@ -813,21 +914,23 @@ export function buildJobRadarReportEmailPreview(
 
   const text = textLines.join("\n");
 
-  const html = buildHtmlEmail({
-    reportDate,
-    summaryItems,
-    topPriorityOffers,
-    aiAnalysisOffers,
-    qualityLines,
-    reportFilename: report.filename,
-  });
+const html = buildHtmlEmail({
+  reportDate,
+  summaryItems,
+  topPriorityOffers,
+  aiAnalysisOffers,
+  qualityLines,
+  reportFilename: report.filename,
+  campaignReportUrl,
+});
 
-  return {
-    subject,
-    body: text,
-    text,
-    html,
-    sourceReportPath: report.filePath,
-    sourceReportFilename: report.filename,
-  };
+return {
+  subject,
+  body: text,
+  text,
+  html,
+  sourceReportPath: report.filePath,
+  sourceReportFilename: report.filename,
+  campaignReportUrl,
+};
 }

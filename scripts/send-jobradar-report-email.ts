@@ -26,7 +26,13 @@ async function main() {
     return;
   }
 
-  const preview = buildJobRadarReportEmailPreview(report);
+ const preview = buildJobRadarReportEmailPreview(
+  report,
+  {
+    appBaseUrl:
+      process.env.JOBRADAR_APP_BASE_URL,
+  },
+);
 
   console.log("JobRadar IA — Email report");
   console.log("-----------------------------------");

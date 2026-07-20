@@ -319,8 +319,9 @@ const batchOffersWithoutAnalysis = await prisma.jobOffer.findMany({
     .slice(0, maxAi);
 }
 
-async function sendLatestReportEmail() {
-  const report = await readLatestJobRadarReport();
+async function sendLatestReportEmail(
+  scope: DailyReportScope,
+) {  const report = await readLatestJobRadarReport();
 
   if (!report) {
     throw new Error(
@@ -328,7 +329,18 @@ async function sendLatestReportEmail() {
     );
   }
 
-  const preview = buildJobRadarReportEmailPreview(report);
+const preview = buildJobRadarReportEmailPreview(
+  report,
+  {
+    appBaseUrl:
+      process.env.JOBRADAR_APP_BASE_URL,
+
+    campaignId:
+      scope.type === "campaign"
+        ? scope.campaignId
+        : null,
+  },
+);
   const config = getEmailSmtpConfig();
 
   const result = await sendEmailWithSmtp(
@@ -437,7 +449,7 @@ async function main() {
   console.log("Envoi du digest email...");
   console.log("");
 
-  await sendLatestReportEmail();
+await sendLatestReportEmail(scope);
 }
 
 main()

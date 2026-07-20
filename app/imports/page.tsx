@@ -2,6 +2,7 @@ import { getApifyRunPlansViewModel } from "@/lib/imports/get-apify-run-plans-vie
 import { getImportSourcesViewModel } from "@/lib/imports/get-import-sources-view-model";
 import { prisma } from "@/lib/prisma";
 import { ImportCampaignButton } from "./ImportCampaignButton";
+import Link from "next/link";
 
 function formatList(values: string[] | null | undefined) {
   if (!values || values.length === 0) {
@@ -228,6 +229,21 @@ export default async function ImportsPage() {
                         </span>
                       </p>
                     ) : null}
+                    {campaign.searchScenarioName ? (
+                      <p className="mt-1 text-sm text-gray-500">
+                        Scénario :{" "}
+                        <span className="text-gray-300">
+                          {campaign.searchScenarioName}
+                        </span>
+                      </p>
+                    ) : null}
+
+                    <Link
+                      href={`/imports/${campaign.id}`}
+                      className="mt-3 inline-flex items-center text-sm font-medium text-indigo-400 hover:text-indigo-300"
+                    >
+                      Voir le détail de la campagne →
+                    </Link>
                   </div>
 
                   <div className="grid grid-cols-2 gap-2 text-sm md:grid-cols-4">
