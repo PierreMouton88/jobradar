@@ -1,22 +1,22 @@
 import "dotenv/config";
 
-import { spawn } from "node:child_process";
 import {
-  ImportCampaignOfferAction,
   ImportCampaignStatus,
+  ImportCampaignOfferAction,
 } from "@prisma/client";
 import { prisma } from "@/lib/prisma";
 import { getAiAnalysisCandidates } from "@/lib/ai/get-ai-analysis-candidates";
-import { analyzeAndSaveJobOffer } from "@/lib/ai/analyze-and-save-job-offer";
 import { getDefaultCandidateProfile } from "@/lib/search-context/get-active-search-context";
 import { mapCandidateProfileToScoringProfile } from "@/lib/search-context/map-candidate-profile-to-scoring-profile";
-import { mapDbOfferToScorableOffer } from "@/lib/scoring/map-db-offer-to-scorable-offer";
-import { scoreJobOffer } from "@/lib/scoring/score-job-offer";
-import { prioritizeJobOffer } from "@/lib/scoring/prioritize-job-offer";
-import { readLatestJobRadarReport } from "@/lib/reports/read-latest-jobradar-report";
+
 import { buildJobRadarReportEmailPreview } from "@/lib/reports/build-jobradar-report-email-preview";
 import { getEmailSmtpConfig } from "@/lib/distribution/email-smtp-config";
 import { sendEmailWithSmtp } from "@/lib/distribution/send-email-with-smtp";
+import {
+  generateJobRadarReport,
+  type GeneratedJobRadarReport,
+} from "@/lib/reports/generate-jobradar-report";
+import { executeAiAnalysisCandidates } from "@/lib/ai/execute-ai-analysis-candidates";
 
 type CliOptions = {
   recentHours: number;
@@ -124,28 +124,10 @@ function estimateRunTokens(candidatesCount: number) {
 
 function uniqueStrings(values: Array<string | null>): string[] {
   return Array.from(
-    new Set(values.filter((value): value is string => typeof value === "string")),
+    new Set(
+      values.filter((value): value is string => typeof value === "string"),
+    ),
   );
-}
-
-function runTsxScript(scriptPath: string, args: string[]): Promise<void> {
-  return new Promise((resolve, reject) => {
-    const child = spawn("tsx", [scriptPath, ...args], {
-      stdio: "inherit",
-      shell: process.platform === "win32",
-    });
-
-    child.on("error", reject);
-
-    child.on("close", (code) => {
-      if (code === 0) {
-        resolve();
-        return;
-      }
-
-      reject(new Error(`${scriptPath} exited with code ${code}`));
-    });
-  });
 }
 
 async function getLatestCampaignScope(): Promise<DailyReportScope> {
@@ -186,7 +168,9 @@ async function getLatestCampaignScope(): Promise<DailyReportScope> {
   }
 
   const jobOfferIds = uniqueStrings(
-    campaign.offers.map((campaignOffer) => campaignOffer.jobOfferId),
+    campaign.offers.map((campaignOffer: { jobOfferId: string | null }) =>
+      campaignOffer.jobOfferId,
+    ),
   );
 
   return {
@@ -213,19 +197,6 @@ async function buildDailyReportScope(
     recentHours: options.recentHours,
     sinceDate,
   };
-}
-
-async function generateScopedReport(scope: DailyReportScope) {
-  if (scope.type === "campaign") {
-    await runTsxScript("scripts/generate-jobradar-report.ts", [
-      `--campaign-id=${scope.campaignId}`,
-    ]);
-    return;
-  }
-
-  await runTsxScript("scripts/generate-jobradar-report.ts", [
-    `--recent-hours=${scope.recentHours}`,
-  ]);
 }
 
 function printSelectedCandidates(
@@ -281,66 +252,23 @@ async function getScopedAiCandidates(
     });
   }
 
-  if (scope.jobOfferIds.length === 0) {
-    return [];
-  }
-
-const batchOffersWithoutAnalysis = await prisma.jobOffer.findMany({
-  where: {
-    id: {
-      in: scope.jobOfferIds,
-    },
-    analysis: null,
-  },
-  include: {
-    analysis: true,
-  },
-});
-
-  return batchOffersWithoutAnalysis
-    .map((offer) => {
-      const scorableOffer = mapDbOfferToScorableOffer(offer);
-      const score = scoreJobOffer(scorableOffer, profile);
-      const priority = prioritizeJobOffer(scorableOffer, score);
-
-      return {
-        offer: {
-          id: offer.id,
-          title: offer.title,
-          company: offer.company,
-          url: offer.url,
-        },
-        score,
-        priority,
-      };
-    })
-    .filter(({ priority }) => priority.priority === "needs_ai_analysis")
-    .sort((a, b) => b.score.percentage - a.score.percentage)
-    .slice(0, maxAi);
+  return getAiAnalysisCandidates({
+    profile,
+    limit: maxAi,
+    jobOfferIds: scope.jobOfferIds,
+  });
 }
 
-async function sendLatestReportEmail(
+async function sendGeneratedReportEmail(
+  report: GeneratedJobRadarReport,
   scope: DailyReportScope,
-) {  const report = await readLatestJobRadarReport();
+) {
+  const preview = buildJobRadarReportEmailPreview(report, {
+    appBaseUrl: process.env.JOBRADAR_APP_BASE_URL,
 
-  if (!report) {
-    throw new Error(
-      "Aucun rapport JobRadar trouvé. La génération du rapport a probablement échoué.",
-    );
-  }
+    campaignId: scope.type === "campaign" ? scope.campaignId : null,
+  });
 
-const preview = buildJobRadarReportEmailPreview(
-  report,
-  {
-    appBaseUrl:
-      process.env.JOBRADAR_APP_BASE_URL,
-
-    campaignId:
-      scope.type === "campaign"
-        ? scope.campaignId
-        : null,
-  },
-);
   const config = getEmailSmtpConfig();
 
   const result = await sendEmailWithSmtp(
@@ -353,6 +281,7 @@ const preview = buildJobRadarReportEmailPreview(
   );
 
   console.log("Email transmis au serveur SMTP.");
+  console.log(`Rapport source : ${report.filePath}`);
   console.log(`Message ID : ${result.messageId}`);
   console.log(`Acceptés : ${result.accepted.join(", ") || "aucun"}`);
   console.log(`Rejetés : ${result.rejected.join(", ") || "aucun"}`);
@@ -405,36 +334,64 @@ async function main() {
   console.log(`~${estimatedRun.estimatedTotalTokens} tokens au total`);
   console.log("");
 
-  if (!options.runAi) {
+  const aiExecution = await executeAiAnalysisCandidates({
+    candidates,
+    maxAnalyses: options.maxAi,
+    execute: options.runAi,
+  });
+
+  if (aiExecution.mode === "DRY_RUN") {
     console.log("Aucun appel IA effectué.");
     console.log("Ajoute --run-ai pour lancer les analyses IA réelles.");
     console.log("");
   } else {
-    console.log("Lancement des analyses IA contrôlées...");
+    console.log("Résultat des analyses IA :");
     console.log("");
 
-    for (const candidate of candidates) {
-      console.log(`Analyse : ${candidate.offer.title ?? candidate.offer.id}`);
+    for (const item of aiExecution.items) {
+      if (item.status === "SUCCESS") {
+        console.log(
+          `✓ ${item.title} — mode=${item.analysisMode}, tokens=${item.totalTokens}`,
+        );
 
-      const result = await analyzeAndSaveJobOffer(candidate.offer.id);
+        continue;
+      }
 
-      console.log(
-        `✓ Analyse sauvegardée — mode=${result.analysisMode}, tokens=${result.totalTokens}`,
-      );
+      console.error(`✗ ${item.title} — ${item.errorMessage}`);
     }
 
     console.log("");
-    console.log(`Analyses terminées : ${candidates.length}`);
+    console.log(
+      `Analyses réussies : ${aiExecution.summary.successfulAnalyses}`,
+    );
+    console.log(`Analyses en erreur : ${aiExecution.summary.failedAnalyses}`);
+    console.log(`Tokens consommés : ${aiExecution.summary.totalTokens}`);
     console.log("");
   }
 
   console.log("Génération du rapport scoped...");
   console.log("");
 
-  await generateScopedReport(scope);
+  const report = await generateJobRadarReport({
+    now,
 
+    scope:
+      scope.type === "campaign"
+        ? {
+            type: "campaign",
+            campaignId: scope.campaignId,
+          }
+        : {
+            type: "recent-hours",
+            recentHours: scope.recentHours,
+          },
+
+    appBaseUrl: process.env.JOBRADAR_APP_BASE_URL,
+  });
+
+  console.log(`Rapport généré : ${report.filePath}`);
+  console.log(`Offres dans le périmètre : ${report.scopedOffersCount}`);
   console.log("");
-
   if (!options.send) {
     console.log("Aucun email envoyé.");
     console.log("Ajoute --send pour envoyer réellement le digest.");
@@ -449,7 +406,7 @@ async function main() {
   console.log("Envoi du digest email...");
   console.log("");
 
-await sendLatestReportEmail(scope);
+  await sendGeneratedReportEmail(report, scope);
 }
 
 main()
@@ -458,6 +415,7 @@ main()
     console.error("Erreur pendant le daily report :");
     console.error(error);
     console.error("");
+
     process.exitCode = 1;
   })
   .finally(async () => {

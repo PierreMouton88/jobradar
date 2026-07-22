@@ -9,7 +9,7 @@ export type LatestJobRadarReport = {
   modifiedAt: Date;
 };
 
-const REPORT_FILENAME_REGEX = /^jobradar-report-\d{4}-\d{2}-\d{2}\.md$/;
+const REPORT_FILENAME_REGEX = /^jobradar-report-\d{4}-\d{2}-\d{2}(?:-[a-zA-Z0-9_-]+)*\.md$/;
 
 function isNodeError(error: unknown): error is NodeJS.ErrnoException {
   return error instanceof Error && "code" in error;

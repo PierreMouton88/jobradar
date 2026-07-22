@@ -1,6 +1,8 @@
 import { RagQuestionForm } from "@/components/rag/RagQuestionForm";
 import { getRagIndexStats } from "@/lib/rag/get-rag-index-stats";
 
+export const dynamic = "force-dynamic";
+
 export default async function RagPage() {
   const stats = await getRagIndexStats();
 

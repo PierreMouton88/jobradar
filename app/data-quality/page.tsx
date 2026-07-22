@@ -1,5 +1,7 @@
 import { prisma } from "@/lib/prisma";
 
+export const dynamic = "force-dynamic";
+
 function countIssues(offers: { qualityIssues: string[] }[]) {
   const issuesCount = new Map<string, number>();
 

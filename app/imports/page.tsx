@@ -4,6 +4,8 @@ import { prisma } from "@/lib/prisma";
 import { ImportCampaignButton } from "./ImportCampaignButton";
 import Link from "next/link";
 
+export const dynamic = "force-dynamic";
+
 function formatList(values: string[] | null | undefined) {
   if (!values || values.length === 0) {
     return "Non renseigné";
