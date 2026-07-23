@@ -1,0 +1,156 @@
+name: jobradar-prod
+
+services:
+  postgres:
+    image: pgvector/pgvector:pg17-trixie
+    restart: unless-stopped
+
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+      POSTGRES_DB: ${POSTGRES_DB}
+
+    volumes:
+      - jobradar_postgres_data:/var/lib/postgresql/data
+
+    healthcheck:
+      test:
+        [
+          "CMD-SHELL",
+          "pg_isready -U $${POSTGRES_USER} -d $${POSTGRES_DB}",
+        ]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 10s
+
+    networks:
+      - jobradar_private
+
+  migrate:
+    profiles:
+      - tools
+
+    build:
+      context: .
+      target: worker
+
+    command:
+      - npm
+      - run
+      - db:migrate:deploy
+
+    restart: "no"
+
+    environment:
+      DATABASE_URL: ${DATABASE_URL}
+
+    depends_on:
+      postgres:
+        condition: service_healthy
+
+    networks:
+      - jobradar_private
+
+  web:
+    build:
+      context: .
+      target: web
+
+    restart: unless-stopped
+
+    environment:
+      DATABASE_URL: ${DATABASE_URL}
+      APIFY_TOKEN: ${APIFY_TOKEN}
+      OPENAI_API_KEY: ${OPENAI_API_KEY}
+      USE_FAKE_AI: ${USE_FAKE_AI}
+
+    depends_on:
+      postgres:
+        condition: service_healthy
+    
+    ports:
+      - "3002:3000"
+
+    healthcheck:
+      test:
+        [
+          "CMD",
+          "node",
+          "-e",
+          "fetch('http://127.0.0.1:3000').then(response => process.exit(response.ok ? 0 : 1)).catch(() => process.exit(1))",
+        ]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 20s
+
+    networks:
+      jobradar_private:
+
+  worker:
+    profiles:
+      - tools
+
+    build:
+      context: .
+      target: worker
+
+    restart: "no"
+
+    environment:
+      DATABASE_URL: ${DATABASE_URL}
+
+      APIFY_TOKEN: ${APIFY_TOKEN}
+
+      OPENAI_API_KEY: ${OPENAI_API_KEY}
+      USE_FAKE_AI: ${USE_FAKE_AI}
+
+      JOBRADAR_APP_BASE_URL: ${JOBRADAR_APP_BASE_URL}
+
+      SMTP_HOST: ${SMTP_HOST}
+      SMTP_PORT: ${SMTP_PORT}
+      SMTP_USER: ${SMTP_USER}
+      SMTP_PASSWORD: ${SMTP_PASSWORD}
+      REPORT_EMAIL_FROM: ${REPORT_EMAIL_FROM}
+      REPORT_EMAIL_TO: ${REPORT_EMAIL_TO}
+
+      DAILY_WORKFLOW_ENABLED: ${DAILY_WORKFLOW_ENABLED}
+
+      DAILY_APIFY_ENABLED: ${DAILY_APIFY_ENABLED}
+      DAILY_RAG_ENABLED: ${DAILY_RAG_ENABLED}
+      DAILY_AI_ENABLED: ${DAILY_AI_ENABLED}
+      DAILY_EMAIL_ENABLED: ${DAILY_EMAIL_ENABLED}
+
+      DAILY_MAX_LOCATIONS: ${DAILY_MAX_LOCATIONS}
+      DAILY_MAX_OFFERS_PER_PLAN: ${DAILY_MAX_OFFERS_PER_PLAN}
+      DAILY_MAX_RAG_DOCUMENTS: ${DAILY_MAX_RAG_DOCUMENTS}
+      DAILY_MAX_EMBEDDINGS: ${DAILY_MAX_EMBEDDINGS}
+      DAILY_MAX_AI_ANALYSES: ${DAILY_MAX_AI_ANALYSES}
+
+      DAILY_TIMEZONE: ${DAILY_TIMEZONE}
+      JOBRADAR_RUNTIME_DIR: ${JOBRADAR_RUNTIME_DIR}
+
+    depends_on:
+      postgres:
+        condition: service_healthy
+
+    volumes:
+      - jobradar_reports:/app/reports
+      - jobradar_runtime:/app/runtime
+
+    networks:
+      - jobradar_private
+
+volumes:
+  jobradar_postgres_data:
+  jobradar_reports:
+  jobradar_runtime:
+
+networks:
+  jobradar_private:
+    driver: bridge
+
+  reverse_proxy:
+    external: true
+    name: chantier-facile-network
