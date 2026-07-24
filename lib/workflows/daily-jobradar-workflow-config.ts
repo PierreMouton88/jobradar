@@ -9,6 +9,14 @@ export const DAILY_WORKFLOW_LIMITS = {
   maxAiAnalyses: 20,
 } as const;
 
+export type ManualDemoWorkflowEnv = Partial<
+  Record<
+    | "MANUAL_DEMO_WORKFLOW_ENABLED"
+    | "DAILY_TIMEZONE",
+    string
+  >
+>;
+
 function booleanFromEnv(defaultValue: boolean) {
   return z.preprocess((value) => {
     if (value === undefined || value === null || value === "") {
@@ -124,6 +132,42 @@ export type DailyJobRadarWorkflowConfig = z.infer<
   typeof dailyJobRadarWorkflowEnvSchema
 >;
 
+export function getManualDemoJobRadarWorkflowConfig(
+  env: ManualDemoWorkflowEnv = process.env as ManualDemoWorkflowEnv,
+): DailyJobRadarWorkflowConfig {
+  const manualDemoEnabled = booleanFromEnv(false).parse(
+    env.MANUAL_DEMO_WORKFLOW_ENABLED,
+  );
+
+  return getDailyJobRadarWorkflowConfig({
+    DAILY_WORKFLOW_ENABLED: String(manualDemoEnabled),
+
+    // La campagne Apify existe déjà.
+    DAILY_APIFY_ENABLED: "false",
+
+    // Pipeline post-import complet.
+    DAILY_RAG_ENABLED: "true",
+    DAILY_AI_ENABLED: "true",
+    DAILY_EMAIL_ENABLED: "true",
+
+    // Non utilisés car Apify est désactivé.
+    DAILY_MAX_LOCATIONS: "1",
+    DAILY_MAX_OFFERS_PER_PLAN: "1",
+
+    // Plafonds techniques maximaux actuellement acceptés par l’application.
+    DAILY_MAX_RAG_DOCUMENTS: String(
+      DAILY_WORKFLOW_LIMITS.maxRagDocuments,
+    ),
+    DAILY_MAX_EMBEDDINGS: String(
+      DAILY_WORKFLOW_LIMITS.maxEmbeddings,
+    ),
+    DAILY_MAX_AI_ANALYSES: String(
+      DAILY_WORKFLOW_LIMITS.maxAiAnalyses,
+    ),
+
+    DAILY_TIMEZONE: env.DAILY_TIMEZONE,
+  });
+}
 export type DailyJobRadarWorkflowStep = "apify" | "rag" | "ai" | "email";
 
 export type DailyJobRadarWorkflowEnv = Partial<

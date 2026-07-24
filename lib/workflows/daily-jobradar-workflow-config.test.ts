@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 
 import {
   getDailyJobRadarWorkflowConfig,
+  getManualDemoJobRadarWorkflowConfig,
   isDailyWorkflowStepEnabled,
 } from "@/lib/workflows/daily-jobradar-workflow-config";
 
@@ -104,5 +105,47 @@ describe("getDailyJobRadarWorkflowConfig", () => {
         DAILY_MAX_AI_ANALYSES: "10000",
       }),
     ).toThrow();
+  });
+
+  describe("getManualDemoJobRadarWorkflowConfig", () => {
+    it("reste désactivé lorsque le coupe-circuit manuel est absent", () => {
+      const config = getManualDemoJobRadarWorkflowConfig({});
+
+      expect(config.enabled).toBe(false);
+      expect(config.apify.enabled).toBe(false);
+    });
+
+    it("construit une démonstration complète avec les plafonds applicatifs", () => {
+      const config = getManualDemoJobRadarWorkflowConfig({
+        MANUAL_DEMO_WORKFLOW_ENABLED: "true",
+        DAILY_TIMEZONE: "Europe/Paris",
+      });
+
+      expect(config).toEqual({
+        enabled: true,
+        timezone: "Europe/Paris",
+
+        apify: {
+          enabled: false,
+          maxLocations: 1,
+          maxOffersPerPlan: 1,
+        },
+
+        rag: {
+          enabled: true,
+          maxDocuments: 200,
+          maxEmbeddings: 50,
+        },
+
+        ai: {
+          enabled: true,
+          maxAnalyses: 20,
+        },
+
+        email: {
+          enabled: true,
+        },
+      });
+    });
   });
 });

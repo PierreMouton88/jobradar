@@ -1,6 +1,6 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
-
+import { ManualDemoWorkflowButton } from "./ManualDemoWorkflowButton";
 import {
   getImportCampaignDetail,
   type ImportCampaignDetailOffer,
@@ -80,6 +80,26 @@ function getStatusClassName(status: string): string {
   }
 }
 
+function getManualDemoDisabledReason(campaign: {
+  dryRun: boolean;
+  status: string;
+  finishedAt: Date | null;
+}): string | null {
+  if (campaign.dryRun) {
+    return "La démonstration complète est indisponible sur une campagne dry-run.";
+  }
+
+  if (campaign.status === "RUNNING" || !campaign.finishedAt) {
+    return "La campagne doit être terminée avant de lancer la suite du pipeline.";
+  }
+
+  if (campaign.status === "FAILED") {
+    return "La démonstration complète est indisponible sur une campagne en échec.";
+  }
+
+  return null;
+}
+
 export default async function ImportCampaignDetailPage({
   params,
 }: ImportCampaignDetailPageProps) {
@@ -90,6 +110,7 @@ export default async function ImportCampaignDetailPage({
   if (!campaign) {
     notFound();
   }
+  const manualDemoDisabledReason = getManualDemoDisabledReason(campaign);
 
   return (
     <main className="mx-auto flex max-w-6xl flex-col gap-8 px-4 py-8">
@@ -211,7 +232,11 @@ export default async function ImportCampaignDetailPage({
           </div>
         ) : null}
       </section>
-
+      <ManualDemoWorkflowButton
+        campaignId={campaign.id}
+        disabled={manualDemoDisabledReason !== null}
+        disabledReason={manualDemoDisabledReason}
+      />
       <section className="rounded-xl border border-gray-800 bg-gray-900 p-6">
         <h2 className="text-lg font-semibold text-white">
           Événements enregistrés
@@ -250,9 +275,7 @@ export default async function ImportCampaignDetailPage({
         </div>
       </section>
 
-      <details
-        className="group rounded-xl border border-gray-800 bg-gray-900"
-      >
+      <details className="group rounded-xl border border-gray-800 bg-gray-900">
         <summary className="flex cursor-pointer list-none flex-col gap-3 p-6 md:flex-row md:items-start md:justify-between [&::-webkit-details-marker]:hidden">
           <div>
             <h2 className="text-lg font-semibold text-white">

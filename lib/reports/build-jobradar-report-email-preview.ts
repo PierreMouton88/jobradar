@@ -778,7 +778,7 @@ function buildHtmlEmail(input: {
                   JobRadar IA
                 </div>
                 <h1 style="margin:0 0 8px;font-size:28px;line-height:36px;color:#ffffff;">
-                  Digest de veille
+                  Rapport de veille
                 </h1>
                 <p style="margin:0;font-size:15px;line-height:23px;color:#cbd5e1;">
                   Rapport du ${escapeHtml(input.reportDate)}
