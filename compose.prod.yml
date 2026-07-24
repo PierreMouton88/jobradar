@@ -60,6 +60,15 @@ services:
     restart: unless-stopped
 
     environment:
+
+
+      DATABASE_URL: ${DATABASE_URL}
+
+      APIFY_TOKEN: ${APIFY_TOKEN}
+
+      OPENAI_API_KEY: ${OPENAI_API_KEY}
+      USE_FAKE_AI: ${USE_FAKE_AI}
+
       JOBRADAR_APP_BASE_URL: ${JOBRADAR_APP_BASE_URL}
 
       SMTP_HOST: ${SMTP_HOST}
