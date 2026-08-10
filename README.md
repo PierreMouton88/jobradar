@@ -66,6 +66,17 @@ The full pipeline has been validated end-to-end in production, including its sch
 
 ---
 
+## Screenshots
+
+| Job list with scoring and filters | LLM analysis of an offer |
+|---|---|
+| <img src="screenshots/offers-list.png" width="400" alt="Job list with scoring and filters"> | <img src="screenshots/offer-analysis.png" width="400" alt="LLM analysis of an offer"> |
+
+| Import campaign audit | RAG query interface |
+|---|---|
+| <img src="screenshots/campaign-audit.png" width="400" alt="Import campaign audit"> | <img src="screenshots/rag-query.png" width="400" alt="RAG query interface"> |
+
+
 ## Why this project
 
 The goal was not simply to build a UI around an LLM.

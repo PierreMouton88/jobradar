@@ -63,6 +63,17 @@ Le pipeline complet a été validé en production, y compris son déclenchement 
 
 ---
 
+## Captures d'écran
+
+| Liste des offres avec scoring et filtres | Analyse LLM d'une offre |
+|---|---|
+| <img src="screenshots/offers-list.png" width="400" alt="Liste des offres avec scoring et filtres"> | <img src="screenshots/offer-analysis.png" width="400" alt="Analyse LLM d'une offre"> |
+
+| Audit d'une campagne d'import | Interface de questions RAG |
+|---|---|
+| <img src="screenshots/campaign-audit.png" width="400" alt="Audit d'une campagne d'import"> | <img src="screenshots/rag-query.png" width="400" alt="Interface de questions RAG"> |
+
+
 ## Pourquoi ce projet
 
 L’objectif n’était pas seulement de construire une interface autour d’un LLM.
