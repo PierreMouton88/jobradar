@@ -4,6 +4,9 @@ JobRadar AI is a full-stack job monitoring application that combines **data coll
 
 The project started as a learning platform around Next.js, PostgreSQL, and applied AI, then evolved into a deployed V2 that can be used for real-world job monitoring.
 
+
+*Read this in [French / Français](README.fr.md).*
+
 ## Main features
 
 - Import job offers from Apify actors for Indeed, LinkedIn, and Meteojob.
