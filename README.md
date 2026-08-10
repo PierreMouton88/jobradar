@@ -1,29 +1,29 @@
-# JobRadar IA
+# JobRadar AI
 
-JobRadar IA est une application fullstack de veille d’offres d’emploi qui combine **collecte de données, scoring explicable, analyse LLM, RAG, reporting et automatisation**.
+JobRadar AI is a full-stack job monitoring application that combines **data collection, explainable scoring, LLM analysis, RAG, reporting, and automation**.
 
-Le projet a commencé comme support d’apprentissage autour de Next.js, PostgreSQL et de l’IA appliquée au web, puis a évolué vers une V2 déployée et utilisable pour une veille réelle.
+The project started as a learning platform around Next.js, PostgreSQL, and applied AI, then evolved into a deployed V2 that can be used for real-world job monitoring.
 
-## Fonctionnalités principales
+## Main features
 
-- Import d’offres depuis des actors Apify pour Indeed, LinkedIn et Meteojob.
-- Génération dynamique des recherches à partir d’un profil et d’un scénario de recherche.
-- Nettoyage, normalisation et déduplication avant stockage.
-- Préfiltre déterministe pour écarter les offres manifestement hors cible.
-- Historisation des campagnes, runs et événements d’import.
-- Scoring de compatibilité explicable avec points positifs et points de vigilance.
-- Priorisation métier des offres.
-- Analyse LLM structurée et validée avec Zod.
-- RAG générique basé sur PostgreSQL + pgvector.
-- Indexation du profil, de documents Markdown et des offres.
-- Synchronisation incrémentale du RAG à partir d’une campagne d’import.
-- Audit complet d’une campagne dans l’interface.
-- Rapports Markdown et digest HTML.
-- Envoi des rapports par email via SMTP.
-- Workflow complet déclenchable manuellement.
-- Automatisation planifiée en production avec Docker et cron.
+- Import job offers from Apify actors for Indeed, LinkedIn, and Meteojob.
+- Dynamically generate searches from a candidate profile and search scenario.
+- Clean, normalize, and deduplicate data before storage.
+- Apply a deterministic relevance prefilter to reject clearly off-target offers.
+- Persist import campaigns, runs, and batch events.
+- Compute an explainable compatibility score with positive signals and warnings.
+- Assign a business-oriented priority level to each offer.
+- Analyze offers with an LLM using structured outputs validated with Zod.
+- Use a generic RAG architecture built on PostgreSQL + pgvector.
+- Index the candidate profile, Markdown documents, and job offers.
+- Incrementally synchronize the RAG index from a specific import campaign.
+- Audit a full import campaign directly from the UI.
+- Generate Markdown reports and HTML digests.
+- Send reports by email through SMTP.
+- Trigger the complete workflow manually.
+- Run the complete workflow automatically in production with Docker and cron.
 
-Aucune candidature n’est envoyée automatiquement et aucun recruteur n’est contacté par l’application.
+No job application is ever sent automatically, and no recruiter is contacted by the application.
 
 ---
 
@@ -31,65 +31,65 @@ Aucune candidature n’est envoyée automatiquement et aucun recruteur n’est c
 
 ```text
 SearchScenario
-→ génération des plans Apify
-→ actors Apify
-→ mappers source-specific
+→ generate Apify run plans
+→ Apify actors
+→ source-specific mappers
 → ExternalJobOffer
-→ nettoyage / normalisation
-→ déduplication
-→ préfiltre de pertinence
+→ cleaning / normalization
+→ deduplication
+→ relevance prefilter
 → PostgreSQL
-→ historique ImportCampaign
-→ scoring / priorisation
-→ analyse LLM
-→ synchronisation RAG
-→ rapport
-→ digest email
+→ ImportCampaign history
+→ scoring / prioritization
+→ LLM analysis
+→ RAG synchronization
+→ report
+→ email digest
 ```
 
-Le workflow automatique utilise le même cœur métier :
+The automated workflow uses the same business logic:
 
 ```text
 cron
-→ worker Docker
-→ import Apify
-→ synchronisation RAG
-→ analyses IA
-→ rapport de campagne
+→ Docker worker
+→ Apify import
+→ RAG synchronization
+→ AI analyses
+→ campaign report
 → email
 ```
 
-Le pipeline complet a été validé en production, y compris son déclenchement automatique planifié.
+The full pipeline has been validated end-to-end in production, including its scheduled automatic execution.
 
 ---
 
-## Pourquoi ce projet
+## Why this project
 
-L’objectif n’était pas seulement de construire une interface autour d’un LLM.
+The goal was not simply to build a UI around an LLM.
 
-JobRadar IA m’a permis de travailler sur une chaîne plus complète :
+JobRadar AI gave me the opportunity to work on a more complete engineering pipeline:
 
-- ingestion de données externes hétérogènes ;
-- transformation vers un modèle pivot ;
-- qualité et déduplication ;
-- modélisation PostgreSQL avec Prisma ;
-- batch processing et historisation ;
-- structured outputs ;
-- contrôle des coûts et appels externes ;
-- recherche vectorielle ;
-- idempotence ;
-- orchestration ;
-- distribution par email ;
-- déploiement Docker ;
-- automatisation et exploitation d’une application IA.
+- ingesting heterogeneous external data;
+- transforming it into a pivot model;
+- handling data quality and deduplication;
+- modeling data with PostgreSQL and Prisma;
+- batch processing and persistent history;
+- structured outputs;
+- controlling costs and external API calls;
+- vector search;
+- idempotency;
+- workflow orchestration;
+- email distribution;
+- Docker deployment;
+- automation and production operations for an AI-powered application.
 
-Une partie importante du projet concerne donc les **garde-fous**, la **traçabilité** et la **séparation des responsabilités**, pas seulement la génération de texte.
+A significant part of the project is therefore focused on **guardrails**, **traceability**, and **separation of responsibilities**, not only on text generation.
 
 ---
 
-## Stack
+## Tech stack
 
-### Fullstack
+### Full stack
 
 - Next.js App Router
 - React
@@ -98,7 +98,7 @@ Une partie importante du projet concerne donc les **garde-fous**, la **traçabil
 - Server Components
 - Server Actions
 
-### Données
+### Data
 
 - PostgreSQL
 - Prisma ORM
@@ -109,9 +109,9 @@ Une partie importante du projet concerne donc les **garde-fous**, la **traçabil
 - Apify
 - Cheerio
 - Playwright
-- imports JSON / datasets externes
+- JSON imports / external datasets
 
-### IA
+### AI
 
 - Vercel AI SDK
 - OpenAI API
@@ -120,7 +120,7 @@ Une partie importante du projet concerne donc les **garde-fous**, la **traçabil
 - OpenAI Embeddings
 - RAG
 
-### Reporting et production
+### Reporting and production
 
 - Nodemailer
 - SMTP / Brevo
@@ -130,7 +130,7 @@ Une partie importante du projet concerne donc les **garde-fous**, la **traçabil
 - Let's Encrypt
 - cron
 
-### Qualité
+### Quality
 
 - Vitest
 - TypeScript
@@ -138,37 +138,37 @@ Une partie importante du projet concerne donc les **garde-fous**, la **traçabil
 
 ---
 
-## Architecture métier
+## Business architecture
 
-Quelques objets structurants :
+A few core entities structure the application:
 
 ```text
 CandidateProfile
-= compétences, niveau et préférences du candidat
+= candidate skills, experience level, and preferences
 
 SearchScenario
-= recherche active : rôles, mots-clés, zones, contrats et sources
+= active search: roles, keywords, locations, contracts, and sources
 
 JobOffer
-= état actuel d’une offre
+= current state of a job offer
 
 ImportCampaign
-= batch d’import
+= import batch
 
 ImportCampaignRun
-= exécution d’une source/localisation dans une campagne
+= execution of a source/location within a campaign
 
 ImportCampaignOffer
-= événement d’offre observé pendant le batch
+= offer event observed during the batch
 
 JobAnalysis
-= analyse structurée générée par le LLM
+= structured analysis generated by the LLM
 
 RagDocumentEmbedding
-= document indexé dans le RAG générique
+= document indexed in the generic RAG system
 ```
 
-Les événements d’une campagne permettent de distinguer notamment :
+Campaign events can distinguish, among others:
 
 ```text
 CREATED
@@ -178,37 +178,37 @@ PREVIEW_ERROR
 IMPORT_ERROR
 ```
 
-Cette séparation évite de déduire l’historique d’un batch uniquement à partir de `createdAt`.
+This separation prevents the application from reconstructing batch history solely from `createdAt`.
 
 ---
 
-## Scoring et priorisation
+## Scoring and prioritization
 
-Le projet distingue volontairement plusieurs notions.
+The project intentionally separates several concepts.
 
-### Préfiltre
+### Prefilter
 
-Décide si une offre mérite d’entrer en base.
+Determines whether an offer deserves to enter the database.
 
-Il est déterministe et n’utilise pas de LLM.
+It is deterministic and does not use an LLM.
 
-Il élimine notamment les offres manifestement hors métier tout en restant tolérant sur des signaux comme le niveau senior, une localisation différente ou une stack imparfaite.
+It rejects clearly irrelevant roles while remaining tolerant of signals such as seniority, a different location, or an imperfect technology stack.
 
-### Score de compatibilité
+### Compatibility score
 
-Répond à :
+Answers:
 
-> À quel point cette offre correspond-elle au profil ?
+> How well does this offer match the candidate profile?
 
-Il prend en compte les compétences, le titre, le contrat, le niveau, la localisation, les signaux IA et la qualité des données.
+It considers skills, title, contract type, seniority, location, AI-generated signals, and data quality.
 
-### Priorité
+### Priority
 
-Répond à :
+Answers:
 
-> Qu’est-ce que je fais de cette offre ?
+> What should I do with this offer?
 
-Niveaux utilisés :
+Priority levels:
 
 ```text
 very_promising
@@ -219,15 +219,15 @@ low_priority
 probably_ignore
 ```
 
-La priorisation sert notamment à éviter d’envoyer inutilement trop d’offres à l’analyse IA.
+Prioritization is also used to avoid sending too many low-value offers to AI analysis.
 
 ---
 
-## Analyse LLM
+## LLM analysis
 
-Les offres candidates peuvent être analysées avec un LLM afin d’extraire une structure validée avec Zod.
+Candidate offers can be analyzed with an LLM to extract structured data validated with Zod.
 
-Exemples de champs :
+Examples of extracted fields:
 
 ```text
 summary
@@ -240,23 +240,23 @@ redFlags
 positiveSignals
 ```
 
-Les analyses sont persistées dans PostgreSQL afin d’éviter des appels répétés.
+Analyses are persisted in PostgreSQL to avoid repeated calls.
 
-Les scripts historiques restent protégés par :
+Historical scripts remain protected by:
 
-- dry-run par défaut ;
-- limite explicite ;
-- flag d’exécution réel ;
-- fake mode ;
-- suivi des tokens.
+- dry-run by default;
+- explicit limits;
+- explicit execution flags;
+- fake mode;
+- token usage tracking.
 
 ---
 
-## RAG profil-aware
+## Profile-aware RAG
 
-Le RAG utilise un index générique `RagDocumentEmbedding`.
+The RAG system uses a generic `RagDocumentEmbedding` index.
 
-Types de documents actuellement utilisés :
+Current document types:
 
 ```text
 candidate_profile
@@ -264,19 +264,19 @@ profile_document
 job_offer
 ```
 
-Cela permet d’interroger ensemble :
+This makes it possible to query together:
 
-- le profil candidat structuré ;
-- les documents Markdown de contexte / CV ;
-- les offres d’emploi indexées.
+- the structured candidate profile;
+- Markdown CV/context documents;
+- indexed job offers.
 
-Le retrieval enrichit la question utilisateur avec le contexte du profil actif avant la recherche vectorielle.
+The retrieval layer enriches the user's question with the active candidate profile before performing vector search.
 
-### Synchronisation incrémentale
+### Incremental synchronization
 
-Après une campagne, JobRadar ne réindexe pas aveuglément toutes les offres.
+After a campaign, JobRadar does not blindly re-index every offer.
 
-Le système construit d’abord un plan :
+It first builds a synchronization plan:
 
 ```text
 CREATE
@@ -284,115 +284,115 @@ UPDATE
 UP_TO_DATE
 ```
 
-Il compare :
+It compares:
 
-- le contenu vectorisé ;
-- le titre ;
-- les métadonnées ;
-- le modèle d’embedding.
+- vectorized content;
+- title;
+- metadata;
+- embedding model.
 
-Un nouvel appel d’embedding n’est effectué que lorsqu’il est réellement nécessaire.
+A new embedding call is made only when it is actually required.
 
 ---
 
-## Historique des campagnes
+## Campaign history
 
-Chaque campagne d’import conserve :
+Each import campaign stores:
 
-- les sources lancées ;
-- les localisations ;
-- les runs Apify ;
-- les offres créées ;
-- les offres mises à jour ;
-- les offres rejetées ;
-- les erreurs ;
-- les compteurs du batch.
+- launched sources;
+- locations;
+- Apify runs;
+- created offers;
+- updated offers;
+- rejected offers;
+- errors;
+- batch counters.
 
-La route :
+The route:
 
 ```text
 /imports/[campaignId]
 ```
 
-sert d’audit complet d’une campagne.
+acts as a full campaign audit trail.
 
-Elle permet de distinguer :
+It explicitly separates:
 
 ```text
-compatibilité actuelle
-≠ score de préfiltre
-≠ qualité technique des données
+current compatibility
+≠ relevance prefilter score
+≠ technical data quality
 ```
 
 ---
 
 ## Reporting
 
-JobRadar produit plusieurs niveaux de restitution.
+JobRadar produces several levels of output.
 
-### Rapport de veille
+### Monitoring report
 
-Synthèse globale, récente ou limitée à une campagne.
+A global, recent, or campaign-scoped summary.
 
-### Rapport complet de campagne
+### Full campaign report
 
-Audit détaillé de tout le batch.
+A detailed audit of the entire batch.
 
-### Digest email
+### Email digest
 
-Résumé volontairement court et actionnable contenant les meilleures offres et un lien vers l’audit complet.
+A deliberately concise and actionable summary containing the best offers and a link to the full audit.
 
-Le digest est envoyé côté serveur via SMTP.
+The digest is sent server-side through SMTP.
 
 ---
 
-## Pages principales
+## Main pages
 
 ```text
 /offers
 ```
 
-Liste paginée des offres avec recherche, filtres, score, priorité et tri.
+Paginated job list with search, filters, score, priority, and sorting.
 
 ```text
 /offers/[id]
 ```
 
-Détail d’une offre et analyse IA.
+Job offer detail and AI analysis.
 
 ```text
 /imports
 ```
 
-Pilotage des campagnes Apify et historique.
+Apify campaign control and history.
 
 ```text
 /imports/[campaignId]
 ```
 
-Audit complet d’une campagne et déclenchement du workflow post-import.
+Full campaign audit and post-import workflow trigger.
 
 ```text
 /rag
 ```
 
-Interface de questions sur le profil, les documents et les offres.
+Question interface over the candidate profile, documents, and job offers.
 
 ```text
 /profile
 ```
 
-Consultation du profil candidat actif.
+Current active candidate profile.
 
 ```text
 /data-quality
 ```
 
-Contrôle de la qualité des données.
+Data quality monitoring.
 
 ---
 
-## Structure simplifiée
+## Simplified project structure
 
 ```text
 jobradar-ia/
@@ -424,16 +424,16 @@ jobradar-ia/
 
 ---
 
-## Lancer le projet en local
+## Run locally
 
-Prérequis :
+Requirements:
 
 - Node.js
 - Docker
 - Docker Compose
-- PostgreSQL avec pgvector via le compose fourni
+- PostgreSQL with pgvector through the provided compose setup
 
-Installation :
+Installation:
 
 ```bash
 npm install
@@ -443,7 +443,7 @@ npm run db:migrate
 npm run dev
 ```
 
-Application :
+Application:
 
 ```text
 http://localhost:3000
@@ -451,9 +451,9 @@ http://localhost:3000
 
 ---
 
-## Variables d’environnement
+## Environment variables
 
-Exemple minimal :
+Minimal example:
 
 ```env
 DATABASE_URL="postgresql://USER:PASSWORD@localhost:5432/DATABASE_NAME"
@@ -473,15 +473,15 @@ REPORT_EMAIL_TO=""
 JOBRADAR_APP_BASE_URL="http://localhost:3000"
 ```
 
-Ne jamais committer les secrets.
+Never commit secrets.
 
-Les clés OpenAI, Apify et SMTP sont utilisées uniquement côté serveur.
+OpenAI, Apify, and SMTP credentials are used server-side only.
 
 ---
 
-## Commandes utiles
+## Useful commands
 
-### Vérification
+### Verification
 
 ```bash
 npm run check
@@ -495,7 +495,7 @@ npm run external:preview
 npm run external:import
 ```
 
-### Analyse IA
+### AI analysis
 
 ```bash
 npm run ai:analyze-candidates -- --limit=5 --dry-run
@@ -528,21 +528,21 @@ npm run report:email:preview
 
 ### Workflow
 
-Dry-run :
+Dry-run:
 
 ```bash
 npm run workflow:daily:run
 ```
 
-Le workflow de production possède une configuration séparée et des garde-fous supplémentaires avant l’exécution réelle.
+The production workflow uses a separate configuration and additional safeguards before real execution.
 
 ---
 
-## Déploiement
+## Deployment
 
-La V2 est déployée sur un serveur personnel ZimaOS avec Docker Compose.
+V2 is deployed on a personal ZimaOS server using Docker Compose.
 
-Architecture de production :
+Production architecture:
 
 ```text
 Internet
@@ -550,103 +550,103 @@ Internet
 → Next.js web
 
 cron
-→ worker Docker ponctuel
+→ temporary Docker worker
 → PostgreSQL + pgvector
-→ APIs externes
+→ external APIs
 ```
 
-La base n’est pas exposée publiquement.
+The database is not exposed publicly.
 
-Le serveur web et le worker utilisent le même cœur métier, ce qui évite d’avoir une implémentation différente entre les déclenchements manuels et automatiques.
+The web server and worker share the same business logic, which avoids having separate implementations for manual and automated executions.
 
-Le workflow planifié a été validé end-to-end en production.
-
----
-
-## Garde-fous
-
-Le projet privilégie une automatisation bornée :
-
-- pas de secrets côté client ;
-- pas d’analyse massive automatique non contrôlée ;
-- limites configurables sur les analyses et embeddings ;
-- idempotence des imports et du RAG ;
-- verrou anti-chevauchement du workflow ;
-- persistance des analyses ;
-- synchronisation RAG ciblée par campagne ;
-- séparation entre import et indexation vectorielle ;
-- journalisation des campagnes ;
-- dry-run sur les scripts sensibles ;
-- aucune candidature automatisée ;
-- aucun contact recruteur automatisé.
+The scheduled workflow has been validated end-to-end in production.
 
 ---
 
-## Ce que j’ai particulièrement travaillé
+## Guardrails
 
-Au-delà des fonctionnalités visibles, le projet m’a permis d’approfondir :
+The project intentionally uses bounded automation:
 
-- architecture Next.js App Router ;
-- Server Components et Server Actions ;
-- modélisation PostgreSQL / Prisma ;
-- migrations et déploiement de schéma ;
-- adapters et mappers pour sources hétérogènes ;
-- idempotence ;
-- batch processing ;
-- orchestration de workflows ;
-- structured outputs LLM ;
-- contrôle des coûts IA ;
-- embeddings et recherche vectorielle ;
-- Docker multi-stage ;
-- séparation web / worker ;
-- variables d’environnement en production ;
-- reverse proxy et HTTPS ;
-- cron, verrous et journalisation ;
-- debugging d’un pipeline distribué entre application, conteneurs et services externes.
+- no secrets on the client side;
+- no uncontrolled mass AI analysis;
+- configurable limits for analyses and embeddings;
+- idempotent imports and RAG synchronization;
+- workflow overlap protection;
+- persisted analyses;
+- campaign-scoped RAG synchronization;
+- separation between import and vector indexing;
+- campaign logging;
+- dry-run modes for sensitive scripts;
+- no automated job applications;
+- no automated recruiter outreach.
 
 ---
 
-## État du projet
+## What I focused on technically
 
-La V2 est considérée comme **fonctionnelle et proche de sa forme finale**.
+Beyond the visible features, this project helped me deepen my understanding of:
 
-Le cœur du produit est opérationnel :
+- Next.js App Router architecture;
+- Server Components and Server Actions;
+- PostgreSQL / Prisma modeling;
+- schema migrations and production deployment;
+- adapters and mappers for heterogeneous sources;
+- idempotency;
+- batch processing;
+- workflow orchestration;
+- LLM structured outputs;
+- AI cost control;
+- embeddings and vector search;
+- multi-stage Docker builds;
+- web / worker separation;
+- production environment variables;
+- reverse proxy and HTTPS;
+- cron, locks, and logging;
+- debugging a distributed pipeline across application code, containers, and external services.
+
+---
+
+## Project status
+
+V2 is considered **functional and close to its final form**.
+
+The core product is operational:
 
 ```text
-collecte
-→ filtrage
-→ stockage
+collection
+→ filtering
+→ storage
 → scoring
-→ IA
+→ AI
 → RAG
 → audit
 → reporting
 → email
-→ automatisation
+→ automation
 ```
 
-Le projet est désormais davantage dans une phase de stabilisation et de réflexion sur d’éventuelles évolutions que dans une phase de construction du socle.
+The project is now more in a stabilization and product-direction phase than in a core infrastructure build phase.
 
 ---
 
-## Pistes futures
+## Possible future improvements
 
-Quelques améliorations possibles, non nécessaires au fonctionnement actuel :
+Potential improvements that are not required for the current version to work:
 
-- interface d’édition du profil et des scénarios ;
-- historisation des workflows et emails ;
-- sauvegardes PostgreSQL automatisées ;
-- page de statut du dernier workflow ;
-- nettoyage automatique des embeddings orphelins ;
-- suppression de quelques briques historiques de la V1 ;
-- traitement asynchrone des workflows manuels si nécessaire ;
-- génération assistée de brouillons de candidature avec validation humaine ;
-- authentification si l’application devient multi-utilisateur.
+- UI editing for candidate profiles and search scenarios;
+- workflow and email history;
+- automated PostgreSQL backups;
+- last-workflow status page;
+- automatic cleanup of orphaned embeddings;
+- removal of a few legacy V1 components;
+- asynchronous manual workflows if needed;
+- assisted application-draft generation with human validation;
+- authentication if the application becomes multi-user.
 
 ---
 
-## À propos
+## About
 
-Projet personnel réalisé dans une logique d’apprentissage et de portfolio.
+Personal project built for learning and portfolio purposes.
 
-Les sources externes et actors utilisés restent soumis à leurs propres conditions d’utilisation. L’automatisation est volontairement limitée aux étapes de veille et d’analyse : aucune candidature ni prise de contact n’est automatisée.
+External sources and Apify actors remain subject to their own terms of use. Automation is intentionally limited to monitoring and analysis: no application submission or recruiter outreach is automated.
